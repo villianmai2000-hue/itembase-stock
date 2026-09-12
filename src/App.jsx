@@ -1,0 +1,701 @@
+import React, { useState, useEffect } from 'react';
+import Navbar from './components/Navbar';
+import TaskBoard from './components/TaskBoard';
+import TaskModal from './components/TaskModal';
+import InventoryCatalog from './components/InventoryCatalog';
+import QRScannerModal from './components/QRScannerModal';
+import AddItemModal from './components/AddItemModal';
+import QRPrintModal from './components/QRPrintModal';
+import LogsPage from './components/LogsPage';
+import SettingsPage from './components/SettingsPage';
+import LoginPage from './components/LoginPage';
+import MobileShareModal from './components/MobileShareModal';
+import { CheckCircle2, AlertCircle, Info, QrCode, Plus } from 'lucide-react';
+
+export default function App() {
+  // Authentication State (ItemBase User Session)
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('itembase_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  // Navigation – persist active tab across page reloads
+  const [activeTab, setActiveTab] = useState(() => {
+    try { return localStorage.getItem('itembase_tab') || 'tasks'; } catch { return 'tasks'; }
+  });
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    try { localStorage.setItem('itembase_tab', tab); } catch {}
+  };
+
+  // Loading states to prevent double-submit
+  const [isSavingItem, setIsSavingItem] = useState(false);
+
+  // Branding (site title, profile image, cover image)
+  const [branding, setBranding] = useState({ siteTitle: 'ItemBase', profileImage: '', coverImage: '' });
+  
+  // Data States
+  const [tasks, setTasks] = useState([]);
+  const [items, setItems] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Active User (Strictly authenticated user from login)
+  const [currentUser, setCurrentUser] = useState(() => authUser ? authUser.name : 'ยุทธการ คำกลอน');
+
+  useEffect(() => {
+    if (authUser) {
+      setCurrentUser(authUser.name);
+    }
+  }, [authUser]);
+
+  // Modals state
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [taskToEdit, setTaskToEdit] = useState(null);
+
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState(null);
+
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [preselectedItemForScan, setPreselectedItemForScan] = useState(null);
+
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [singleItemForPrint, setSingleItemForPrint] = useState(null);
+
+  const [isMobileShareOpen, setIsMobileShareOpen] = useState(false);
+
+  // Toast notification
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  // Login handler
+  const handleLoginSuccess = (userSession) => {
+    localStorage.setItem('itembase_user', JSON.stringify(userSession));
+    setAuthUser(userSession);
+    setCurrentUser(userSession.name);
+    switchTab('tasks');
+    showToast(`ยินดีต้อนรับคุณ ${userSession.name} เข้าสู่ระบบ ItemBase`);
+    loadData(userSession.name);
+  };
+
+  // Logout handler
+  const handleLogout = () => {
+    localStorage.removeItem('itembase_user');
+    try { localStorage.removeItem('itembase_tab'); } catch {}
+    setAuthUser(null);
+    setCurrentUser('');
+    switchTab('tasks');
+    showToast('ออกจากระบบ ItemBase เรียบร้อยแล้ว');
+  };
+
+  // Fetch initial data
+  const loadData = async (activeUserName) => {
+    try {
+      setLoading(true);
+      const reqHeaders = {};
+      const uName = activeUserName || (authUser ? authUser.name : currentUser);
+      if (uName) {
+        reqHeaders['x-user-name'] = encodeURIComponent(uName);
+      }
+
+      const [resTasks, resItems, resLogs, resSettings, resBranding] = await Promise.all([
+        fetch('/api/tasks').then(r => r.json()),
+        fetch('/api/items').then(r => r.json()),
+        fetch('/api/logs').then(r => r.json()),
+        fetch('/api/settings', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/settings/branding').then(r => r.json()).catch(() => ({})),
+      ]);
+
+      setTasks(Array.isArray(resTasks) ? resTasks : []);
+      setItems(Array.isArray(resItems) ? resItems : []);
+      setLogs(Array.isArray(resLogs) ? resLogs : []);
+      
+      if (resSettings) {
+        setTeamMembers(resSettings.team_members || []);
+        setLocations(resSettings.locations || []);
+        setCategories(resSettings.categories || []);
+      }
+      if (resBranding && resBranding.siteTitle) {
+        setBranding(resBranding);
+        document.title = `${resBranding.siteTitle} - ระบบคลังและจัดการงาน`;
+      }
+    } catch (err) {
+      console.error('Error loading data:', err);
+      showToast('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // ------------------------------------
+  // TASK ACTIONS (Todo & Kanban)
+  // ------------------------------------
+
+  const handleSaveTask = async (taskData) => {
+    try {
+      const isEdit = !!taskData.id;
+      const url = isEdit ? `/api/tasks/${taskData.id}` : '/api/tasks';
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...taskData, user: currentUser })
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'บันทึกงานไม่สำเร็จ');
+
+      setIsTaskModalOpen(false);
+      setTaskToEdit(null);
+      showToast(isEdit ? 'แก้ไขข้อมูลงานเรียบร้อย' : 'สร้างงานใหม่ของทีมสำเร็จ');
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!confirm('คุณต้องการลบงานนี้ใช่หรือไม่?')) return;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'ลบงานไม่สำเร็จ');
+      showToast('ลบงานเรียบร้อย');
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleUpdateTaskStatus = async (taskId, newStatus) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) throw new Error('อัปเดตสถานะงานไม่สำเร็จ');
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  // Issue material & deduct stock
+  const handleIssueMaterial = async (taskId, materialIndex) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/issue-materials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materialIndex, user: currentUser })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'เบิกของไม่สำเร็จ');
+
+      showToast(`เบิกของสำเร็จ! ตัดสต็อก ${result.item.name} เรียบร้อยแล้ว`);
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  // Return material & restore stock
+  const handleReturnMaterial = async (taskId, materialIndex, returnQty, note) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/return-materials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materialIndex, returnQty, user: currentUser, note })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'ส่งคืนของไม่สำเร็จ');
+
+      showToast(`ส่งคืนของสำเร็จ! ยอดคงเหลือเพิ่มกลับเข้าคลังเรียบร้อย`);
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  // ------------------------------------
+  // ITEM ACTIONS (วัสดุอุปกรณ์ & สต็อก)
+  // ------------------------------------
+
+  const handleSaveItem = async (formData, itemId = null) => {
+    if (isSavingItem) return; // prevent double-submit
+    setIsSavingItem(true);
+    try {
+      const isEdit = !!itemId;
+      const url = isEdit ? `/api/items/${itemId}` : '/api/items';
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const hasFiles = formData.imageFiles && formData.imageFiles.length > 0;
+
+      let bodyData;
+      let headers = {};
+
+      if (hasFiles) {
+        const data = new FormData();
+        const skip = new Set(['imageFiles', 'existingImageUrls', 'gps', 'imageFile', 'imageUrl']);
+        Object.keys(formData).forEach(key => {
+          if (!skip.has(key) && formData[key] !== undefined) {
+            data.append(key, formData[key]);
+          }
+        });
+        if (formData.gps) {
+          data.append('gps', JSON.stringify(formData.gps));
+        }
+        formData.imageFiles.forEach(file => {
+          data.append('imageFiles', file);
+        });
+        if (formData.existingImageUrls && formData.existingImageUrls.length > 0) {
+          data.append('existingImageUrls', JSON.stringify(formData.existingImageUrls));
+        }
+        bodyData = data;
+      } else {
+        headers['Content-Type'] = 'application/json';
+        const payload = { ...formData };
+        delete payload.imageFiles;
+        if (formData.existingImageUrls && formData.existingImageUrls.length > 0) {
+          payload.imageUrl = formData.existingImageUrls[0];
+          payload.existingImageUrls = formData.existingImageUrls;
+        }
+        delete payload.imageFile;
+        bodyData = JSON.stringify(payload);
+      }
+
+      const res = await fetch(url, { method, headers, body: bodyData });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'บันทึกข้อมูลไม่สำเร็จ');
+
+      setIsAddModalOpen(false);
+      setItemToEdit(null);
+      showToast(isEdit ? 'แก้ไขข้อมูลพัสดุเรียบร้อย' : `ลงทะเบียน ${result.name} สำเร็จและสร้าง QR Code แล้ว!`);
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsSavingItem(false);
+    }
+  };
+
+
+
+  const handleDeleteItem = async (itemId) => {
+    if (!confirm('คุณต้องการลบวัสดุอุปกรณ์นี้ออกจากสต็อกใช่หรือไม่?')) return;
+    try {
+      const res = await fetch(`/api/items/${itemId}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'ลบรายการไม่สำเร็จ');
+      showToast('ลบรายการพัสดุเรียบร้อย');
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleUpdateAudit = async (itemId, actualQuantity, location, note, gps) => {
+    const res = await fetch(`/api/items/${itemId}/audit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actualQuantity, location, user: currentUser, note, gps })
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      showToast(result.error || 'ตรวจนับสต็อกไม่สำเร็จ', 'error');
+      throw new Error(result.error);
+    }
+    showToast(`ตรวจนับสต็อกสำเร็จ! อัปเดตยอดคงเหลือเป็น ${actualQuantity} เรียบร้อยแล้ว`);
+    loadData();
+  };
+
+  const handleTransaction = async (itemId, type, amount, targetLocation, note, gps) => {
+    const res = await fetch(`/api/items/${itemId}/transaction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, amount, targetLocation, user: currentUser, note, gps })
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      showToast(result.error || 'ทำรายการไม่สำเร็จ', 'error');
+      throw new Error(result.error);
+    }
+    showToast(`บันทึกรายการสำเร็จ!`);
+    loadData();
+  };
+
+
+  // ------------------------------------
+  // SETTINGS ACTIONS
+  // ------------------------------------
+
+  const handleSaveMembers = async (members) => {
+    try {
+      const res = await fetch('/api/settings/members', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-name': encodeURIComponent(currentUser)
+        },
+        body: JSON.stringify({ members, requester: currentUser })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'บันทึกรายชื่อพนักงานไม่สำเร็จ');
+      setTeamMembers(members);
+      showToast('บันทึกรายชื่อพนักงานและรหัสผ่านเรียบร้อย');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleSaveLocations = async (locs) => {
+    try {
+      const res = await fetch('/api/settings/locations', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-name': encodeURIComponent(currentUser)
+        },
+        body: JSON.stringify({ locations: locs, requester: currentUser })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'บันทึกสถานที่จัดเก็บไม่สำเร็จ');
+      setLocations(locs);
+      showToast('บันทึกสถานที่จัดเก็บเรียบร้อย');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleSaveCategories = async (cats) => {
+    try {
+      const res = await fetch('/api/settings/categories', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-name': encodeURIComponent(currentUser)
+        },
+        body: JSON.stringify({ categories: cats, requester: currentUser })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'บันทึกหมวดหมู่ไม่สำเร็จ');
+      setCategories(cats);
+      showToast('บันทึกหมวดหมู่เรียบร้อย');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleResetData = async () => {
+    try {
+      const res = await fetch('/api/reset', { 
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-name': encodeURIComponent(currentUser) 
+        },
+        body: JSON.stringify({ requester: currentUser })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'รีเซ็ตข้อมูลไม่สำเร็จ');
+      showToast('รีเซ็ตข้อมูลระบบกลับสู่ค่าเริ่มต้นเรียบร้อยแล้ว');
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleImportData = async (jsonData) => {
+    try {
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-name': encodeURIComponent(currentUser)
+        },
+        body: JSON.stringify({ ...jsonData, requester: currentUser })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'นำเข้าข้อมูลไม่สำเร็จ');
+      showToast('นำเข้าข้อมูลสำรองสำเร็จ!');
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleSaveBranding = async (brandingData) => {
+    try {
+      const data = new FormData();
+      data.append('requester', currentUser);
+      if (brandingData.siteTitle !== undefined) data.append('siteTitle', brandingData.siteTitle);
+      if (brandingData.profileImageFile) data.append('profileImage', brandingData.profileImageFile);
+      else if (brandingData.profileImageUrl !== undefined) data.append('profileImageUrl', brandingData.profileImageUrl);
+      if (brandingData.coverImageFile) data.append('coverImage', brandingData.coverImageFile);
+      else if (brandingData.coverImageUrl !== undefined) data.append('coverImageUrl', brandingData.coverImageUrl);
+
+      const res = await fetch('/api/settings/branding', {
+        method: 'PUT',
+        headers: { 'x-user-name': encodeURIComponent(currentUser) },
+        body: data
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'บันทึกการตั้งค่าเว็บไซต์ไม่สำเร็จ');
+      setBranding(result.branding);
+      if (result.branding.siteTitle) {
+        document.title = `${result.branding.siteTitle} - ระบบคลังและจัดการงาน`;
+      }
+      showToast('บันทึกการตั้งค่าเว็บไซต์เรียบร้อย');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  // Helpers
+  const lowStockCount = items.filter(i => i.quantity <= i.minStock).length;
+
+
+  // If user is not authenticated, display the Login Wall
+  if (!authUser) {
+    return (
+      <>
+        {toast && (
+          <div className="fixed bottom-5 right-5 z-50 animate-bounce">
+            <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-2xl text-xs sm:text-sm font-semibold text-white ${
+              toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'
+            }`}>
+              {toast.type === 'error' ? <AlertCircle className="w-5 h-5 shrink-0" /> : <CheckCircle2 className="w-5 h-5 shrink-0" />}
+              <span>{toast.message}</span>
+            </div>
+          </div>
+        )}
+        <LoginPage 
+          onLoginSuccess={handleLoginSuccess} 
+          teamMembers={teamMembers} 
+          openMobileShareModal={() => setIsMobileShareOpen(true)} 
+          branding={branding}
+        />
+        <MobileShareModal
+          isOpen={isMobileShareOpen}
+          onClose={() => setIsMobileShareOpen(false)}
+        />
+      </>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+      
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 animate-bounce">
+          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-2xl text-xs sm:text-sm font-semibold text-white ${
+            toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'
+          }`}>
+            {toast.type === 'error' ? <AlertCircle className="w-5 h-5 shrink-0" /> : <CheckCircle2 className="w-5 h-5 shrink-0" />}
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Main Navbar */}
+      <Navbar
+        activeTab={activeTab}
+        setActiveTab={switchTab}
+        currentUser={currentUser}
+        authUser={authUser}
+        onLogout={handleLogout}
+        lowStockCount={lowStockCount}
+        branding={branding}
+        openAddModal={() => {
+          setItemToEdit(null);
+          setIsAddModalOpen(true);
+        }}
+        openScanModal={() => {
+          setPreselectedItemForScan(null);
+          setIsScanModalOpen(true);
+        }}
+        openMobileShareModal={() => setIsMobileShareOpen(true)}
+      />
+
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {loading ? (
+          <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
+            กำลังโหลดข้อมูลระบบงานและสต็อก ItemBase...
+          </div>
+        ) : (
+          <>
+            {activeTab === 'tasks' && (
+              <TaskBoard
+                tasks={tasks}
+                items={items}
+                teamMembers={teamMembers}
+                currentUser={currentUser}
+                onOpenNewTaskModal={() => {
+                  setTaskToEdit(null);
+                  setIsTaskModalOpen(true);
+                }}
+                onEditTask={(t) => {
+                  setTaskToEdit(t);
+                  setIsTaskModalOpen(true);
+                }}
+                onDeleteTask={handleDeleteTask}
+                onUpdateTaskStatus={handleUpdateTaskStatus}
+                onIssueMaterial={handleIssueMaterial}
+                onReturnMaterial={handleReturnMaterial}
+              />
+            )}
+
+            {activeTab === 'catalog' && (
+              <InventoryCatalog
+                items={items}
+                categories={categories}
+                locations={locations}
+                onOpenAddModal={() => {
+                  setItemToEdit(null);
+                  setIsAddModalOpen(true);
+                }}
+                onOpenEditModal={(item) => {
+                  setItemToEdit(item);
+                  setIsAddModalOpen(true);
+                }}
+                onDeleteItem={handleDeleteItem}
+                onOpenPrintModal={(item) => {
+                  setSingleItemForPrint(item);
+                  setIsPrintModalOpen(true);
+                }}
+                onOpenAuditModal={(item) => {
+                  setPreselectedItemForScan(item);
+                  setIsScanModalOpen(true);
+                }}
+                onOpenItemLogs={(item) => {
+                  switchTab('logs');
+                }}
+              />
+            )}
+
+            {activeTab === 'logs' && (
+              <LogsPage
+                logs={logs}
+                items={items}
+                currentUser={currentUser}
+                onDeleteLog={async (logId) => {
+                  try {
+                    const res = await fetch(`/api/logs/${logId}`, {
+                      method: 'DELETE',
+                      headers: { 'x-user-name': encodeURIComponent(currentUser) }
+                    });
+                    const result = await res.json();
+                    if (!res.ok) throw new Error(result.error || 'ลบรายการไม่สำเร็จ');
+                    showToast('ลบรายการประวัติเรียบร้อย');
+                    loadData();
+                  } catch (err) {
+                    showToast(err.message, 'error');
+                  }
+                }}
+              />
+            )}
+
+            {activeTab === 'settings' && (
+            <SettingsPage
+                teamMembers={teamMembers}
+                locations={locations}
+                categories={categories}
+                onSaveMembers={handleSaveMembers}
+                onSaveLocations={handleSaveLocations}
+                onSaveCategories={handleSaveCategories}
+                onResetData={handleResetData}
+                onImportData={handleImportData}
+                onSaveBranding={handleSaveBranding}
+                branding={branding}
+                currentUser={currentUser}
+                authUser={authUser}
+              />
+            )}
+          </>
+        )}
+      </main>
+
+      {/* MODALS */}
+
+      {/* Task Modal (Create / Edit Task & Requisition) */}
+      <TaskModal
+        isOpen={isTaskModalOpen}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setTaskToEdit(null);
+        }}
+        onSave={handleSaveTask}
+        taskToEdit={taskToEdit}
+        teamMembers={teamMembers}
+        items={items}
+      />
+
+      {/* Add / Edit Item Modal (With Photo & Live QR Generation) */}
+      <AddItemModal
+        isOpen={isAddModalOpen}
+        onClose={() => {
+          if (!isSavingItem) { setIsAddModalOpen(false); setItemToEdit(null); }
+        }}
+        onSave={handleSaveItem}
+        isSaving={isSavingItem}
+        itemToEdit={itemToEdit}
+        categories={categories}
+        locations={locations}
+        currentUser={currentUser}
+      />
+
+      {/* QR Scanner & Check-in Modal (Audit, In, Out, Move) */}
+      <QRScannerModal
+        isOpen={isScanModalOpen}
+        onClose={() => {
+          setIsScanModalOpen(false);
+          setPreselectedItemForScan(null);
+        }}
+        items={items}
+        locations={locations}
+        currentUser={currentUser}
+        onUpdateAudit={handleUpdateAudit}
+        onTransaction={handleTransaction}
+        preselectedItem={preselectedItemForScan}
+      />
+
+      {/* Print QR Sticker Modal */}
+      <QRPrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => {
+          setIsPrintModalOpen(false);
+          setSingleItemForPrint(null);
+        }}
+        items={items}
+        singleItem={singleItemForPrint}
+      />
+
+      {/* Mobile / Tablet Link & QR Share Modal */}
+      <MobileShareModal
+        isOpen={isMobileShareOpen}
+        onClose={() => setIsMobileShareOpen(false)}
+      />
+
+    </div>
+  );
+}

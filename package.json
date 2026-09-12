@@ -1,0 +1,32 @@
+{
+  "name": "construction-task-stock",
+  "version": "1.0.0",
+  "description": "ระบบจัดการงานทีมและสต็อกพัสดุอุปกรณ์งานก่อสร้าง",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "concurrently \"node server/index.js\" \"vite --host\"",
+    "server": "node server/index.js",
+    "client": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "html5-qrcode": "^2.3.8",
+    "lucide-react": "^1.16.0",
+    "multer": "^1.4.5-lts.1",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.0.7"
+  }
+}

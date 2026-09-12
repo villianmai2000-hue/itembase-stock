@@ -1,0 +1,18 @@
+{
+  "name": "ItemBase - ระบบคลังวัสดุอุปกรณ์",
+  "short_name": "ItemBase",
+  "description": "ระบบจัดการสต็อกวัสดุอุปกรณ์ก่อสร้าง สแกน QR ตรวจนับสต็อก",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#ea580c",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

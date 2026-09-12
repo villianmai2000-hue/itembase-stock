@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23ea580c%22><path d=%22M20 7h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-6 0h-4V4h4v3z%22/></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#ea580c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ItemBase" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>ItemBase - ระบบคลังวัสดุและจัดการสต็อกออนไลน์</title>
+    <meta name="description" content="ItemBase ระบบบริหารจัดการสต็อก คลังวัสดุอุปกรณ์ก่อสร้าง สแกน QR Code ตรวจนับสต็อกหน้างานออนไลน์ ใช้งานผ่านมือถือและคอมพิวเตอร์ได้ทุกที่ตลอด 24 ชั่วโมง" />
+    <meta name="keywords" content="ItemBase, ระบบสต็อก, จัดการคลังสินค้า, คลังวัสดุก่อสร้าง, สแกน QR Code, สต็อกออนไลน์, เช็คสต็อก" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="ItemBase - ระบบคลังวัสดุและจัดการสต็อกออนไลน์" />
+    <meta property="og:description" content="ระบบจัดการงานทีม สแกน QR Code ตรวจนับสต็อกหน้างาน เบิกจ่ายและอัปเดตสต็อกเรียลไทม์ออนไลน์" />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-slate-50 text-slate-900 min-h-screen antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>
+
