@@ -1,10 +1,7 @@
-const CACHE = "itembase-v1";
-const SHELL = ["/", "/index.html"];
+const CACHE = "itembase-v3";
 
-self.addEventListener("install", e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
-  );
+self.addEventListener("install", () => {
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", e => {
@@ -18,12 +15,17 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
 
-  // Never intercept API requests - let browser handle network directly
-  if (url.pathname.startsWith("/api/")) {
+  // Never intercept API requests, page navigation, or HTML files
+  if (
+    url.pathname.startsWith("/api/") || 
+    e.request.mode === 'navigate' || 
+    url.pathname.endsWith('.html') || 
+    url.pathname === '/'
+  ) {
     return;
   }
 
-
+  // Uploaded images: cache-first with network fallback
   if (url.pathname.startsWith("/uploads/")) {
     e.respondWith(
       caches.open(CACHE).then(async cache => {
@@ -32,20 +34,23 @@ self.addEventListener("fetch", e => {
         const fresh = await fetch(e.request);
         cache.put(e.request, fresh.clone());
         return fresh;
-      }).catch(() => new Response("", { status: 503 }))
+      }).catch(() => fetch(e.request))
     );
     return;
   }
 
-  // For everything else: network-first, fallback to cache (shell)
+  // Static hashed assets (JS/CSS): network-first, fallback to cache
   e.respondWith(
     fetch(e.request)
       .then(res => {
-        const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
+        if (res.ok && e.request.method === 'GET') {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
         return res;
       })
-      .catch(() => caches.match(e.request).then(r => r || caches.match("/index.html")))
+      .catch(() => caches.match(e.request))
   );
 });
+
 

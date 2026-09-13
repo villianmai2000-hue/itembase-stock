@@ -5,7 +5,6 @@
       "name": "ยุทธการ คำกลอน",
       "role": "ผู้ควบคุมระบบ / เขียนแบบโครงการ",
       "phone": "0643032859",
-      "password": "0962033005Maiiam2000",
       "isAdmin": true,
       "status": "active"
     },
@@ -14,7 +13,6 @@
       "name": "สมโภช  สุทินธุ์",
       "role": "ช่างประสานงานและฝ่ายจัดส่งสินค้า",
       "phone": "-",
-      "password": "13790285",
       "isAdmin": false,
       "status": "active"
     },
@@ -23,7 +21,6 @@
       "name": "นายวีรศักดิ์   อนุพันธ์",
       "role": "ผู้จัดการโครงการ",
       "phone": "-",
-      "password": "85027913",
       "isAdmin": false,
       "status": "active"
     },
@@ -32,7 +29,6 @@
       "name": "Leena",
       "role": "เจ้าหน้าที่นับและตรวจสต็อก",
       "phone": "-",
-      "password": "73198052",
       "isAdmin": false,
       "status": "active"
     },
@@ -41,7 +37,6 @@
       "name": "คุณอำภาพร  สำลีม่วง",
       "role": "งานสโตร์",
       "phone": "-",
-      "password": "71938028",
       "isAdmin": false,
       "status": "active"
     }
@@ -67,7 +62,7 @@
       "id": "ITM-043",
       "name": "สีปามมาสติก Pammastic TOA",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
-      "quantity": 8,
+      "quantity": 10,
       "unit": "ชิ้น",
       "minStock": 2,
       "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
@@ -78,14 +73,14 @@
       ],
       "note": "TOA",
       "qrCode": "data:image/png;base64,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",
-      "updatedAt": "2026-09-13T04:07:05.470Z",
+      "updatedAt": "2026-09-13T04:14:15.753Z",
       "updatedBy": "ยุทธการ คำกลอน"
     },
     {
       "id": "ITM-042",
       "name": "กระเบื้องพื้นห้องน้ำ",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
-      "quantity": 25,
+      "quantity": 2,
       "unit": "กล่อง",
       "minStock": 20,
       "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
@@ -96,7 +91,7 @@
       ],
       "note": "",
       "qrCode": "data:image/png;base64,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",
-      "updatedAt": "2026-09-11T11:19:34.507Z",
+      "updatedAt": "2026-09-13T04:13:38.704Z",
       "updatedBy": "ยุทธการ คำกลอน"
     },
     {
@@ -118,27 +113,6 @@
       "note": "",
       "qrCode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAARgAAAEYCAYAAACHjumMAAAAAklEQVR4AewaftIAAAYQSURBVO3BwY0ktpIFwKdEG8AjfaD/ptAHHumBVoAcYAGbmC79iPjr738EoEEFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoEkFoMlPGo25wufu2fkNxlz50+7Z+cSYK3zunp0OFYAmFYAmFYAmFYAmFYAmFYAmFYAmFYAmFYAmFYAmP/kl7tn5LxtzpcOYK13u2Xk15sqre3Z+g3t2/svGXPnTKgBNKgBNKgBNKgBNKgBNKgBNKgBNKgBNKgBNKgBNfvKFxlz5De7Z+dPu2fkN7tn5Lxtz5Te4Z+ebVACaVACaVACaVACaVACaVACaVACaVACaVACaVACa/AT+H4y58uqeHf43VACaVACaVACaVACaVACaVACaVACaVACaVACaVACaVACa/ISvNuZKl3t2Xt2z82rMlVf37PC9KgBNKgBNKgBNKgBNKgBNKgBNKgBNKgBNKgBNKgBNfvKF7tnhX/fs0O+eHT5XAWhSAWhSAWhSAWhSAWhSAWhSAWhSAWhSAWhSAWjyk19izBU+N+bKJ+7ZeTXmyqt7dr7NmCv0qgA0qQA0qQA0qQA0qQA0qQA0qQA0qQA0qQA0qQA0+evvf4T/GWOuvLpn59WYKx3u2eF7VQCaVACaVACaVACaVACaVACaVACaVACaVACaVACa/KTRmCuv7tl5NebKq3t2PjHmyqt7dl6NufLqnp3fYMyVDvfsfJsxV17ds9NlzJVX9+z8aRWAJhWAJhWAJhWAJhWAJhWAJhWAJhWAJhWAJhWAJhWAJj9pdM/OqzFXXt2z823u2Xk15sqre3a63LPzbcZceXXPzqt7dl6NudLlnp1XY668umenQwWgSQWgSQWgSQWgSQWgSQWgSQWgSQWgSQWgSQWgyU8ajbnyp4258huMufLqnp1XY6584p6dV2OuvLpn59WYK6/u2fnEPTsdxlx5dc/OqzFXPjHmyjepADSpADSpADSpADSpADSpADSpADSpADSpADSpADT5yX/cPTu/wT073+aenQ737HQZc+XVPTuv7tl5NebKq3t2PjHmyqt7dv60CkCTCkCTCkCTCkCTCkCTCkCTCkCTCkCTCkCTCkCTnzS6Z6fDmCu/wT07r8ZceXXPzqt7dr7NmCuv7tn5DcZceXXPzqsxV7qMufLqnp0OFYAmFYAmFYAmFYAmFYAmFYAmFYAmFYAmFYAmFYAmP/lC9+x8m3t2Ooy58ol7dl6NudLhnp1XY6584p6dV2OuvLpn5ze4Z+fVmCt/WgWgSQWgSQWgSQWgSQWgSQWgSQWgSQWgSQWgSQWgSQWgyV9//yNNxlzhc/fsfJsxV17ds/NqzJXf4J4dPlcBaFIBaFIBaFIBaFIBaFIBaFIBaFIBaFIBaFIBaPKTX+Kenf+yMVf415grXe7ZeTXmyqsxVzrcs9NlzJVX9+x0qAA0qQA0qQA0qQA0qQA0qQA0qQA0qQA0qQA0qQA0+ckXGnPlN7hn508bc6XLPTsd7tl5NebKJ8Zc6XDPTocxVz5xz843qQA0qQA0qQA0qQA0qQA0qQA0qQA0qQA0qQA0qQA0+Qlf7Z6dT4y50uGenQ737HxizJU/bcyVV/fsfGLMlVf37PxpFYAmFYAmFYAmFYAmFYAmFYAmFYAmFYAmFYAmFYAmP+GrjbnybcZceXXPzifu2ekw5kqHMVc+cc/OqzFXXt2z06EC0KQC0KQC0KQC0KQC0KQC0KQC0KQC0KQC0KQC0KQC0OQnX+ieHf51z84nxlx5NebKq3t2Xt2z02XMlVf37Ly6Z+fVmCuv7tn5xJgr36QC0KQC0KQC0KQC0KQC0KQC0KQC0KQC0KQC0KQC0OQnv8SYK3xuzJUu9+x0GHPl1T07v8GYK6/u2Xk15son7tl5NebKn1YBaFIBaFIBaFIBaFIBaFIBaFIBaFIBaFIBaFIBaPLX3/8IQIMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJMKQJP/A20KNG6xa171AAAAAElFTkSuQmCC",
       "updatedAt": "2026-09-11T11:16:16.187Z",
-      "updatedBy": "ยุทธการ คำกลอน"
-    },
-    {
-      "id": "ITM-104",
-      "name": "ปูนเข้า 11-9-69 ปูนฉาบสำเร็จ ทีพีไอ",
-      "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
-      "quantity": 320,
-      "unit": "ถุง/กระสอบ",
-      "minStock": 40,
-      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
-      "gps": null,
-      "image": "/uploads/item-1789113112250-275008658.jpeg",
-      "images": [
-        "/uploads/item-1789113112250-275008658.jpeg",
-        "/uploads/item-1789113112524-430533887.jpeg",
-        "/uploads/item-1789113112723-586371987.jpeg",
-        "/uploads/item-1789113113022-419657657.jpeg"
-      ],
-      "note": "TPI M200",
-      "qrCode": "data:image/png;base64,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",
-      "updatedAt": "2026-09-11T08:06:56.261Z",
       "updatedBy": "ยุทธการ คำกลอน"
     },
     {
@@ -907,6 +881,70 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-855753",
+      "itemId": "ITM-043",
+      "itemName": "สีปามมาสติก Pammastic TOA",
+      "type": "audit",
+      "changeQty": -1,
+      "balanceQty": 10,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "referenceType": "qr_audit",
+      "referenceId": "ITM-043",
+      "user": "ยุทธการ คำกลอน",
+      "note": "คืนค่า",
+      "timestamp": "2026-09-13T04:14:15.753Z"
+    },
+    {
+      "id": "LOG-854838",
+      "itemId": "ITM-043",
+      "itemName": "สีปามมาสติก Pammastic TOA",
+      "type": "audit",
+      "changeQty": 1,
+      "balanceQty": 11,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "referenceType": "qr_audit",
+      "referenceId": "ITM-043",
+      "user": "ยุทธการ คำกลอน",
+      "note": "ทดสอบปรับยอดบน Render",
+      "timestamp": "2026-09-13T04:14:14.838Z"
+    },
+    {
+      "id": "LOG-818704",
+      "itemId": "ITM-042",
+      "itemName": "กระเบื้องพื้นห้องน้ำ",
+      "type": "out",
+      "changeQty": -23,
+      "balanceQty": 2,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "referenceType": "transaction",
+      "referenceId": "ITM-042",
+      "user": "ยุทธการ คำกลอน",
+      "note": "เบิกของออก",
+      "timestamp": "2026-09-13T04:13:38.704Z"
+    },
+    {
+      "id": "LOG-808378",
+      "itemId": "ITM-043",
+      "itemName": "สีปามมาสติก Pammastic TOA",
+      "type": "audit",
+      "changeQty": 2,
+      "balanceQty": 10,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "referenceType": "qr_audit",
+      "referenceId": "ITM-043",
+      "user": "ยุทธการ คำกลอน",
+      "note": "สแกนตรวจนับสต็อกหน้างาน (เดิม 8 -> เป็น 10 ชิ้น)",
+      "timestamp": "2026-09-13T04:13:28.378Z"
+    },
     {
       "id": "LOG-233258",
       "itemId": "ITM-043",
