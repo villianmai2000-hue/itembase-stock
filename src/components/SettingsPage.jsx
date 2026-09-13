@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   MapPin, 
@@ -22,9 +22,9 @@ import {
 } from 'lucide-react';
 
 export default function SettingsPage({ 
-  teamMembers, 
-  locations, 
-  categories, 
+  teamMembers = [], 
+  locations = [], 
+  categories = [], 
   onSaveMembers, 
   onSaveLocations, 
   onSaveCategories,
@@ -44,7 +44,6 @@ export default function SettingsPage({
   const [profilePreview, setProfilePreview] = useState(branding.profileImage || '');
   const [coverImageFile, setCoverImageFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState(branding.coverImage || '');
-
 
   // Member editing state
   const [membersList, setMembersList] = useState([...teamMembers]);
@@ -67,8 +66,34 @@ export default function SettingsPage({
   const [categoriesList, setCategoriesList] = useState([...categories]);
   const [newCategory, setNewCategory] = useState('');
 
+  // Keep internal state synchronized whenever parent props change (e.g. after reload or save)
+  useEffect(() => {
+    if (Array.isArray(teamMembers) && teamMembers.length > 0) {
+      setMembersList([...teamMembers]);
+    }
+  }, [teamMembers]);
+
+  useEffect(() => {
+    if (Array.isArray(locations) && locations.length > 0) {
+      setLocationsList([...locations]);
+    }
+  }, [locations]);
+
+  useEffect(() => {
+    if (Array.isArray(categories) && categories.length > 0) {
+      setCategoriesList([...categories]);
+    }
+  }, [categories]);
+
+  useEffect(() => {
+    if (branding.siteTitle) setSiteTitleInput(branding.siteTitle);
+    if (branding.profileImage) setProfilePreview(branding.profileImage);
+    if (branding.coverImage) setCoverPreview(branding.coverImage);
+  }, [branding]);
+
   // Success message
   const [saveMessage, setSaveMessage] = useState('');
+
 
   const showSaved = (msg) => {
     setSaveMessage(msg);

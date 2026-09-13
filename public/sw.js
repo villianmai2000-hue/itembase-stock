@@ -1,4 +1,4 @@
-﻿const CACHE = "itembase-v1";
+const CACHE = "itembase-v1";
 const SHELL = ["/", "/index.html"];
 
 self.addEventListener("install", e => {
@@ -18,11 +18,11 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
 
-  // Always fetch API and uploads from network; fall back to cache for uploads
+  // Never intercept API requests - let browser handle network directly
   if (url.pathname.startsWith("/api/")) {
-    e.respondWith(fetch(e.request).catch(() => new Response(JSON.stringify({error:"offline"}),{headers:{"Content-Type":"application/json"}})));
     return;
   }
+
 
   if (url.pathname.startsWith("/uploads/")) {
     e.respondWith(

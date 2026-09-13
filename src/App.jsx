@@ -109,22 +109,33 @@ export default function App() {
         reqHeaders['x-user-name'] = encodeURIComponent(uName);
       }
 
+      const t = Date.now();
+      const fetchJson = async (url, opts = {}) => {
+        const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}_t=${t}`, {
+          cache: 'no-store',
+          ...opts,
+          headers: { ...(opts.headers || {}) }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      };
+
       const [resTasks, resItems, resLogs, resSettings, resBranding] = await Promise.all([
-        fetch('/api/tasks').then(r => r.json()),
-        fetch('/api/items').then(r => r.json()),
-        fetch('/api/logs').then(r => r.json()),
-        fetch('/api/settings', { headers: reqHeaders }).then(r => r.json()),
-        fetch('/api/settings/branding').then(r => r.json()).catch(() => ({})),
+        fetchJson('/api/tasks').catch(() => null),
+        fetchJson('/api/items').catch(() => null),
+        fetchJson('/api/logs').catch(() => null),
+        fetchJson('/api/settings', { headers: reqHeaders }).catch(() => null),
+        fetchJson('/api/settings/branding').catch(() => null),
       ]);
 
-      setTasks(Array.isArray(resTasks) ? resTasks : []);
-      setItems(Array.isArray(resItems) ? resItems : []);
-      setLogs(Array.isArray(resLogs) ? resLogs : []);
+      if (Array.isArray(resTasks)) setTasks(resTasks);
+      if (Array.isArray(resItems)) setItems(resItems);
+      if (Array.isArray(resLogs)) setLogs(resLogs);
       
-      if (resSettings) {
-        setTeamMembers(resSettings.team_members || []);
-        setLocations(resSettings.locations || []);
-        setCategories(resSettings.categories || []);
+      if (resSettings && typeof resSettings === 'object') {
+        if (Array.isArray(resSettings.team_members)) setTeamMembers(resSettings.team_members);
+        if (Array.isArray(resSettings.locations)) setLocations(resSettings.locations);
+        if (Array.isArray(resSettings.categories)) setCategories(resSettings.categories);
       }
       if (resBranding && resBranding.siteTitle) {
         setBranding(resBranding);
@@ -137,6 +148,7 @@ export default function App() {
       setLoading(false);
     }
   };
+
 
 
   useEffect(() => {
