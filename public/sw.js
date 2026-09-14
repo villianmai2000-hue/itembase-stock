@@ -1,4 +1,4 @@
-const CACHE = "itembase-v3";
+const CACHE = "itembase-v4";
 
 self.addEventListener("install", () => {
   self.skipWaiting();

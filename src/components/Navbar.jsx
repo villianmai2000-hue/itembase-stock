@@ -27,11 +27,14 @@ export default function Navbar({
   branding = {},
   openAddModal,
   openScanModal,
-  openMobileShareModal
+  openMobileShareModal,
+  serverOnline = true,
+  onReconnect
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAdmin = authUser?.isAdmin || currentUser === 'ยุทธการ คำกลอน';
   const siteTitle = branding?.siteTitle || 'ItemBase';
+  const isCloudHost = typeof window !== 'undefined' && (window.location.hostname.includes('onrender.com') || !window.location.hostname.includes('localhost'));
 
   const navItems = [
     { id: 'tasks', label: 'งานของทีม (Todo)', icon: CheckSquare },
@@ -111,6 +114,26 @@ export default function Navbar({
 
           {/* Quick Action Buttons & Current User */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Server Online/Offline Indicator */}
+            {serverOnline ? (
+              <div 
+                className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 border border-slate-700/80 text-emerald-400"
+                title={isCloudHost ? 'เชื่อมต่อระบบออนไลน์ 24 ชม. บนคลาวด์ Render สำเร็จ' : 'เชื่อมต่อเซิร์ฟเวอร์บนเครื่องนี้สำเร็จ'}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{isCloudHost ? 'ออนไลน์ 24 ชม.' : 'เชื่อมต่อปกติ'}</span>
+              </div>
+            ) : (
+              <button
+                onClick={onReconnect}
+                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow animate-pulse transition"
+                title="เซิร์ฟเวอร์ขาดการเชื่อมต่อ คลิกเพื่อพยายามเชื่อมต่อใหม่"
+              >
+                <span className="w-2 h-2 rounded-full bg-white"></span>
+                <span>ขาดการเชื่อมต่อ (กดเชื่อมใหม่)</span>
+              </button>
+            )}
+
             {/* Scan QR Quick Button */}
             <button
               onClick={openScanModal}

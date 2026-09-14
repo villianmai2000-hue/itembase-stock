@@ -13,6 +13,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Disable ETag generation so browser always receives fresh data
+app.set('etag', false);
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -330,136 +333,146 @@ app.delete('/api/items/:id', (req, res) => {
 
 // Stock Audit / Check-in via QR Scan
 app.post('/api/items/:id/audit', (req, res) => {
-  const db = readDb();
-  const itemId = req.params.id;
-  const item = db.items.find(i => i.id.toLowerCase() === itemId.toLowerCase());
+  try {
+    const db = readDb();
+    const itemId = req.params.id;
+    const item = db.items.find(i => i.id.toLowerCase() === itemId.toLowerCase());
 
-  if (!item) {
-    return res.status(404).json({ error: 'ไม่พบสินค้าในระบบ' });
-  }
-
-  const { actualQuantity, location, user, note, gps } = req.body;
-  if (actualQuantity === undefined || actualQuantity === null) {
-    return res.status(400).json({ error: 'กรุณาระบุจำนวนที่นับได้จริง' });
-  }
-
-  let parsedGps = null;
-  if (gps) {
-    try {
-      parsedGps = typeof gps === 'string' ? JSON.parse(gps) : gps;
-    } catch (e) {
-      parsedGps = null;
+    if (!item) {
+      return res.status(404).json({ error: 'ไม่พบสินค้าในระบบ' });
     }
+
+    const { actualQuantity, location, user, note, gps } = req.body;
+    if (actualQuantity === undefined || actualQuantity === null) {
+      return res.status(400).json({ error: 'กรุณาระบุจำนวนที่นับได้จริง' });
+    }
+
+    let parsedGps = null;
+    if (gps) {
+      try {
+        parsedGps = typeof gps === 'string' ? JSON.parse(gps) : gps;
+      } catch (e) {
+        parsedGps = null;
+      }
+    }
+
+    const count = Number(actualQuantity);
+    const oldQty = item.quantity;
+    const oldLocation = item.location;
+    const newLocation = (location && location.trim()) || oldLocation;
+    if (newLocation && !db.locations.includes(newLocation)) {
+      db.locations.push(newLocation);
+    }
+    const diff = count - oldQty;
+
+    item.quantity = count;
+    item.location = newLocation;
+    if (parsedGps) {
+      item.gps = parsedGps;
+    }
+    item.updatedAt = getThaiTimestamp();
+    item.updatedBy = user || 'ยุทธการ คำกลอน';
+
+    const logId = `LOG-${Date.now().toString().slice(-6)}`;
+    db.inventory_logs.unshift({
+      id: logId,
+      itemId: item.id,
+      itemName: item.name,
+      type: 'audit',
+      changeQty: diff,
+      balanceQty: count,
+      location: newLocation,
+      gps: parsedGps || item.gps,
+      previousLocation: oldLocation,
+      referenceType: 'qr_audit',
+      referenceId: item.id,
+      user: user || 'ยุทธการ คำกลอน',
+      note: note || `สแกนตรวจนับสต็อกหน้างาน (เดิม ${oldQty} -> เป็น ${count} ${item.unit})`,
+      timestamp: getThaiTimestamp()
+    });
+
+    saveDb(db);
+    res.json({ message: 'บันทึกการตรวจนับสต็อกสำเร็จ', item });
+  } catch (err) {
+    console.error('Error in /api/items/:id/audit:', err);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการบันทึกผลตรวจนับสต็อก' });
   }
-
-  const count = Number(actualQuantity);
-  const oldQty = item.quantity;
-  const oldLocation = item.location;
-  const newLocation = (location && location.trim()) || oldLocation;
-  if (newLocation && !db.locations.includes(newLocation)) {
-    db.locations.push(newLocation);
-  }
-  const diff = count - oldQty;
-
-  item.quantity = count;
-  item.location = newLocation;
-  if (parsedGps) {
-    item.gps = parsedGps;
-  }
-  item.updatedAt = getThaiTimestamp();
-  item.updatedBy = user || 'ยุทธการ คำกลอน';
-
-  const logId = `LOG-${Date.now().toString().slice(-6)}`;
-  db.inventory_logs.unshift({
-    id: logId,
-    itemId: item.id,
-    itemName: item.name,
-    type: 'audit',
-    changeQty: diff,
-    balanceQty: count,
-    location: newLocation,
-    gps: parsedGps || item.gps,
-    previousLocation: oldLocation,
-    referenceType: 'qr_audit',
-    referenceId: item.id,
-    user: user || 'ยุทธการ คำกลอน',
-    note: note || `สแกนตรวจนับสต็อกหน้างาน (เดิม ${oldQty} -> เป็น ${count} ${item.unit})`,
-    timestamp: getThaiTimestamp()
-  });
-
-  saveDb(db);
-  res.json({ message: 'บันทึกการตรวจนับสต็อกสำเร็จ', item });
 });
 
 // Stock Transaction: In / Out / Move
 app.post('/api/items/:id/transaction', (req, res) => {
-  const db = readDb();
-  const itemId = req.params.id;
-  const item = db.items.find(i => i.id.toLowerCase() === itemId.toLowerCase());
+  try {
+    const db = readDb();
+    const itemId = req.params.id;
+    const item = db.items.find(i => i.id.toLowerCase() === itemId.toLowerCase());
 
-  if (!item) {
-    return res.status(404).json({ error: 'ไม่พบสินค้าในระบบ' });
+    if (!item) {
+      return res.status(404).json({ error: 'ไม่พบสินค้าในระบบ' });
+    }
+
+    const { type, amount, targetLocation, user, note, gps } = req.body;
+    // type: 'in' (รับเข้า), 'out' (เบิกออก), 'move' (ย้ายสถานที่)
+    const qty = Number(amount) || 0;
+    const oldQty = item.quantity;
+    const oldLocation = item.location;
+
+    let parsedGps = null;
+    if (gps) {
+      try {
+        parsedGps = typeof gps === 'string' ? JSON.parse(gps) : gps;
+      } catch (e) {
+        parsedGps = null;
+      }
+    }
+
+    if (type === 'in') {
+      item.quantity += qty;
+    } else if (type === 'out') {
+      if (item.quantity < qty) {
+        return res.status(400).json({ error: `ยอดคงเหลือไม่พอ (มีอยู่ ${item.quantity} ${item.unit})` });
+      }
+      item.quantity -= qty;
+    } else if (type === 'move') {
+      if (!targetLocation || !targetLocation.trim()) {
+        return res.status(400).json({ error: 'กรุณาระบุสถานที่ปลายทาง' });
+      }
+      const moveLoc = targetLocation.trim();
+      item.location = moveLoc;
+      if (parsedGps) {
+        item.gps = parsedGps;
+      }
+      if (moveLoc && !db.locations.includes(moveLoc)) {
+        db.locations.push(moveLoc);
+      }
+    }
+
+    item.updatedAt = getThaiTimestamp();
+    item.updatedBy = user || 'ยุทธการ คำกลอน';
+
+    const logId = `LOG-${Date.now().toString().slice(-6)}`;
+    db.inventory_logs.unshift({
+      id: logId,
+      itemId: item.id,
+      itemName: item.name,
+      type: type,
+      changeQty: type === 'in' ? qty : (type === 'out' ? -qty : 0),
+      balanceQty: item.quantity,
+      location: item.location,
+      gps: parsedGps || item.gps,
+      previousLocation: oldLocation,
+      referenceType: 'transaction',
+      referenceId: item.id,
+      user: user || 'ยุทธการ คำกลอน',
+      note: note || (type === 'in' ? 'รับของเข้าสต็อก' : type === 'out' ? 'เบิกของออก' : `ย้ายจาก ${oldLocation} ไป ${item.location}`),
+      timestamp: getThaiTimestamp()
+    });
+
+    saveDb(db);
+    res.json({ message: 'ทำรายการสำเร็จ', item });
+  } catch (err) {
+    console.error('Error in /api/items/:id/transaction:', err);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการทำรายการสต็อก' });
   }
-
-  const { type, amount, targetLocation, user, note, gps } = req.body;
-  // type: 'in' (รับเข้า), 'out' (เบิกออก), 'move' (ย้ายสถานที่)
-  const qty = Number(amount) || 0;
-  const oldQty = item.quantity;
-  const oldLocation = item.location;
-
-  let parsedGps = null;
-  if (gps) {
-    try {
-      parsedGps = typeof gps === 'string' ? JSON.parse(gps) : gps;
-    } catch (e) {
-      parsedGps = null;
-    }
-  }
-
-  if (type === 'in') {
-    item.quantity += qty;
-  } else if (type === 'out') {
-    if (item.quantity < qty) {
-      return res.status(400).json({ error: `ยอดคงเหลือไม่พอ (มีอยู่ ${item.quantity} ${item.unit})` });
-    }
-    item.quantity -= qty;
-  } else if (type === 'move') {
-    if (!targetLocation || !targetLocation.trim()) {
-      return res.status(400).json({ error: 'กรุณาระบุสถานที่ปลายทาง' });
-    }
-    const moveLoc = targetLocation.trim();
-    item.location = moveLoc;
-    if (parsedGps) {
-      item.gps = parsedGps;
-    }
-    if (moveLoc && !db.locations.includes(moveLoc)) {
-      db.locations.push(moveLoc);
-    }
-  }
-
-  item.updatedAt = getThaiTimestamp();
-  item.updatedBy = user || 'ยุทธการ คำกลอน';
-
-  const logId = `LOG-${Date.now().toString().slice(-6)}`;
-  db.inventory_logs.unshift({
-    id: logId,
-    itemId: item.id,
-    itemName: item.name,
-    type: type,
-    changeQty: type === 'in' ? qty : (type === 'out' ? -qty : 0),
-    balanceQty: item.quantity,
-    location: item.location,
-    gps: parsedGps || item.gps,
-    previousLocation: oldLocation,
-    referenceType: 'transaction',
-    referenceId: item.id,
-    user: user || 'ยุทธการ คำกลอน',
-    note: note || (type === 'in' ? 'รับของเข้าสต็อก' : type === 'out' ? 'เบิกของออก' : `ย้ายจาก ${oldLocation} ไป ${item.location}`),
-    timestamp: getThaiTimestamp()
-  });
-
-  saveDb(db);
-  res.json({ message: 'ทำรายการสำเร็จ', item });
 });
 
 // Get all logs

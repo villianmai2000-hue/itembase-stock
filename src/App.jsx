@@ -46,6 +46,7 @@ export default function App() {
   const [locations, setLocations] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [serverOnline, setServerOnline] = useState(true);
 
   // Active User (Strictly authenticated user from login)
   const [currentUser, setCurrentUser] = useState(() => authUser ? authUser.name : 'ยุทธการ คำกลอน');
@@ -81,22 +82,20 @@ export default function App() {
 
   // Login handler
   const handleLoginSuccess = (userSession) => {
-    localStorage.setItem('itembase_user', JSON.stringify(userSession));
     setAuthUser(userSession);
     setCurrentUser(userSession.name);
-    switchTab('tasks');
+    localStorage.setItem('itembase_user', JSON.stringify(userSession));
     showToast(`ยินดีต้อนรับคุณ ${userSession.name} เข้าสู่ระบบ ItemBase`);
     loadData(userSession.name);
   };
 
   // Logout handler
   const handleLogout = () => {
+    if (!confirm('คุณต้องการออกจากระบบใช่หรือไม่?')) return;
+    setAuthUser(null);
     localStorage.removeItem('itembase_user');
     try { localStorage.removeItem('itembase_tab'); } catch {}
-    setAuthUser(null);
-    setCurrentUser('');
-    switchTab('tasks');
-    showToast('ออกจากระบบ ItemBase เรียบร้อยแล้ว');
+    showToast('ออกจากระบบเรียบร้อยแล้ว');
   };
 
   // Fetch initial data
@@ -129,7 +128,12 @@ export default function App() {
       ]);
 
       if (Array.isArray(resTasks)) setTasks(resTasks);
-      if (Array.isArray(resItems)) setItems(resItems);
+      if (Array.isArray(resItems)) {
+        setItems(resItems);
+        setServerOnline(true);
+      } else {
+        setServerOnline(false);
+      }
       if (Array.isArray(resLogs)) setLogs(resLogs);
       
       if (resSettings && typeof resSettings === 'object') {
@@ -143,6 +147,7 @@ export default function App() {
       }
     } catch (err) {
       console.error('Error loading data:', err);
+      setServerOnline(false);
       showToast('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง', 'error');
     } finally {
       setLoading(false);
@@ -153,6 +158,12 @@ export default function App() {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      fetch(`/api/settings/branding?_t=${Date.now()}`, { cache: 'no-store' })
+        .then(r => setServerOnline(r.ok))
+        .catch(() => setServerOnline(false));
+    }, 25000);
+    return () => clearInterval(interval);
   }, []);
 
   // ------------------------------------
@@ -297,60 +308,114 @@ export default function App() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'บันทึกข้อมูลไม่สำเร็จ');
 
+      // Optimistically update React state immediately with confirmed response
+      if (result && result.id) {
+        setItems(prev => {
+          const idx = prev.findIndex(i => i.id.toLowerCase() === result.id.toLowerCase());
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = result;
+            return copy;
+          }
+          return [result, ...prev];
+        });
+      }
+
       setIsAddModalOpen(false);
       setItemToEdit(null);
       showToast(isEdit ? 'แก้ไขข้อมูลพัสดุเรียบร้อย' : `ลงทะเบียน ${result.name} สำเร็จและสร้าง QR Code แล้ว!`);
-      loadData();
+      await loadData();
     } catch (err) {
+      console.error('handleSaveItem error:', err);
       showToast(err.message, 'error');
+      alert(`⚠️ บันทึกข้อมูลไม่สำเร็จ: ${err.message}\n\nกรุณาตรวจสอบว่าเซิร์ฟเวอร์เปิดอยู่`);
     } finally {
       setIsSavingItem(false);
     }
   };
 
-
-
   const handleDeleteItem = async (itemId) => {
     if (!confirm('คุณต้องการลบวัสดุอุปกรณ์นี้ออกจากสต็อกใช่หรือไม่?')) return;
+    // Optimistic delete from UI
+    setItems(prev => prev.filter(i => i.id.toLowerCase() !== itemId.toLowerCase()));
     try {
       const res = await fetch(`/api/items/${itemId}`, { method: 'DELETE' });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'ลบรายการไม่สำเร็จ');
       showToast('ลบรายการพัสดุเรียบร้อย');
-      loadData();
+      await loadData();
     } catch (err) {
+      console.error('handleDeleteItem error:', err);
       showToast(err.message, 'error');
+      await loadData(); // revert
     }
   };
 
   const handleUpdateAudit = async (itemId, actualQuantity, location, note, gps) => {
-    const res = await fetch(`/api/items/${itemId}/audit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ actualQuantity, location, user: currentUser, note, gps })
-    });
-    const result = await res.json();
-    if (!res.ok) {
-      showToast(result.error || 'ตรวจนับสต็อกไม่สำเร็จ', 'error');
-      throw new Error(result.error);
+    const count = Number(actualQuantity);
+    const newLocation = (location && location.trim()) || '';
+
+    // 1. Optimistically update local React state immediately so count changes on screen without waiting
+    setItems(prev => prev.map(item => {
+      if (item.id.toLowerCase() === itemId.toLowerCase()) {
+        return {
+          ...item,
+          quantity: count,
+          location: newLocation || item.location,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser || item.updatedBy
+        };
+      }
+      return item;
+    }));
+
+    try {
+      const res = await fetch(`/api/items/${itemId}/audit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actualQuantity: count, location: newLocation, user: currentUser, note, gps })
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || 'ตรวจนับสต็อกไม่สำเร็จ');
+      }
+      showToast(`ตรวจนับสต็อกสำเร็จ! อัปเดตยอดคงเหลือเป็น ${count} เรียบร้อยแล้ว`);
+      if (result.item) {
+        setItems(prev => prev.map(item => item.id.toLowerCase() === itemId.toLowerCase() ? result.item : item));
+      }
+      await loadData();
+    } catch (err) {
+      console.error('handleUpdateAudit error:', err);
+      showToast(err.message, 'error');
+      // Revert from server
+      await loadData();
+      alert(`⚠️ ตรวจนับสต็อกไม่สำเร็จ: ${err.message}\n\nกรุณาตรวจสอบว่าเซิร์ฟเวอร์เปิดอยู่ และลองใหม่อีกครั้ง`);
+      throw err;
     }
-    showToast(`ตรวจนับสต็อกสำเร็จ! อัปเดตยอดคงเหลือเป็น ${actualQuantity} เรียบร้อยแล้ว`);
-    loadData();
   };
 
   const handleTransaction = async (itemId, type, amount, targetLocation, note, gps) => {
-    const res = await fetch(`/api/items/${itemId}/transaction`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, amount, targetLocation, user: currentUser, note, gps })
-    });
-    const result = await res.json();
-    if (!res.ok) {
-      showToast(result.error || 'ทำรายการไม่สำเร็จ', 'error');
-      throw new Error(result.error);
+    try {
+      const res = await fetch(`/api/items/${itemId}/transaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, amount, targetLocation, user: currentUser, note, gps })
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || 'ทำรายการไม่สำเร็จ');
+      }
+      showToast(`บันทึกรายการสำเร็จ!`);
+      if (result && result.item) {
+        setItems(prev => prev.map(i => i.id.toLowerCase() === itemId.toLowerCase() ? result.item : i));
+      }
+      await loadData();
+    } catch (err) {
+      console.error('handleTransaction error:', err);
+      showToast(err.message, 'error');
+      alert(`⚠️ ทำรายการไม่สำเร็จ: ${err.message}`);
+      throw err;
     }
-    showToast(`บันทึกรายการสำเร็จ!`);
-    loadData();
   };
 
 
@@ -536,6 +601,8 @@ export default function App() {
         onLogout={handleLogout}
         lowStockCount={lowStockCount}
         branding={branding}
+        serverOnline={serverOnline}
+        onReconnect={() => loadData()}
         openAddModal={() => {
           setItemToEdit(null);
           setIsAddModalOpen(true);
