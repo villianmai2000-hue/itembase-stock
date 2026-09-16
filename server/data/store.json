@@ -59,6 +59,25 @@
   ],
   "items": [
     {
+      "id": "ITM-210",
+      "name": "น้ำยากันซึม LANKO 226",
+      "category": "หมวดวัสดุเหลือใช้และเคมีภัณฑ์ (Leftover Materials & Chemicals)",
+      "quantity": 4,
+      "unit": "ชิ้น",
+      "minStock": 2,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "image": "/uploads/item-1789543863340-634596355.jpg",
+      "images": [
+        "/uploads/item-1789543863340-634596355.jpg",
+        "/uploads/item-1789543865114-125128959.jpg"
+      ],
+      "note": "LANKO 226",
+      "qrCode": "data:image/png;base64,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",
+      "updatedAt": "2026-09-16T07:31:06.183Z",
+      "updatedBy": "ยุทธการ คำกลอน"
+    },
+    {
       "id": "ITM-043",
       "name": "สีปามมาสติก Pammastic TOA",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
@@ -881,6 +900,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-866183",
+      "itemId": "ITM-210",
+      "itemName": "น้ำยากันซึม LANKO 226",
+      "type": "add",
+      "changeQty": 4,
+      "balanceQty": 4,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "-",
+      "referenceType": "manual",
+      "referenceId": "-",
+      "user": "ยุทธการ คำกลอน",
+      "note": "ลงทะเบียนวัสดุอุปกรณ์ใหม่: น้ำยากันซึม LANKO 226",
+      "timestamp": "2026-09-16T07:31:06.183Z"
+    },
     {
       "id": "LOG-445984",
       "itemId": "ITM-034",
