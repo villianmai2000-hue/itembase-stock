@@ -59,6 +59,24 @@
   ],
   "items": [
     {
+      "id": "ITM-050",
+      "name": "น้ำยาประสานคอนกรีต LANKO 751",
+      "category": "หมวดวัสดุเหลือใช้และเคมีภัณฑ์ (Leftover Materials & Chemicals)",
+      "quantity": 2,
+      "unit": "ชุด",
+      "minStock": 1,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "image": "/uploads/item-1789549601043-461259043.jpg",
+      "images": [
+        "/uploads/item-1789549601043-461259043.jpg"
+      ],
+      "note": "LANKO 751",
+      "qrCode": "data:image/png;base64,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",
+      "updatedAt": "2026-09-16T09:06:41.690Z",
+      "updatedBy": "ยุทธการ คำกลอน"
+    },
+    {
       "id": "ITM-049",
       "name": "ดอกสว่านเจาะปูนโรตารี่ 6mm. X L 160mm.",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
@@ -1016,6 +1034,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-601690",
+      "itemId": "ITM-050",
+      "itemName": "น้ำยาประสานคอนกรีต LANKO 751",
+      "type": "add",
+      "changeQty": 2,
+      "balanceQty": 2,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "-",
+      "referenceType": "manual",
+      "referenceId": "-",
+      "user": "ยุทธการ คำกลอน",
+      "note": "ลงทะเบียนวัสดุอุปกรณ์ใหม่: น้ำยาประสานคอนกรีต LANKO 751",
+      "timestamp": "2026-09-16T09:06:41.690Z"
+    },
     {
       "id": "LOG-945059",
       "itemId": "ITM-172",
