@@ -213,7 +213,7 @@
       "id": "ITM-034",
       "name": "เซี้ยมพีวีซี PVC สีดำ",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
-      "quantity": 5,
+      "quantity": 3,
       "unit": "กล่อง",
       "minStock": 10,
       "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
@@ -226,7 +226,7 @@
       ],
       "note": "",
       "qrCode": "data:image/png;base64,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",
-      "updatedAt": "2026-09-11T11:16:00.868Z",
+      "updatedAt": "2026-09-16T07:24:05.984Z",
       "updatedBy": "ยุทธการ คำกลอน"
     },
     {
@@ -881,6 +881,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-445984",
+      "itemId": "ITM-034",
+      "itemName": "เซี้ยมพีวีซี PVC สีดำ",
+      "type": "out",
+      "changeQty": -2,
+      "balanceQty": 3,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "referenceType": "transaction",
+      "referenceId": "ITM-034",
+      "user": "ยุทธการ คำกลอน",
+      "note": "เบิกของออก",
+      "timestamp": "2026-09-16T07:24:05.984Z"
+    },
     {
       "id": "LOG-395057",
       "itemId": "ITM-008",
