@@ -292,7 +292,7 @@
       "id": "ITM-039",
       "name": "อิฐแดงตัน FL.3",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
-      "quantity": 30,
+      "quantity": 26,
       "unit": "ถุง/กระสอบ",
       "minStock": 20,
       "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
@@ -304,7 +304,7 @@
       ],
       "note": "",
       "qrCode": "data:image/png;base64,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",
-      "updatedAt": "2026-09-11T11:17:01.452Z",
+      "updatedAt": "2026-09-16T11:54:13.045Z",
       "updatedBy": "ยุทธการ คำกลอน"
     },
     {
@@ -1036,6 +1036,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-653045",
+      "itemId": "ITM-039",
+      "itemName": "อิฐแดงตัน FL.3",
+      "type": "out",
+      "changeQty": -4,
+      "balanceQty": 26,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "referenceType": "transaction",
+      "referenceId": "ITM-039",
+      "user": "ยุทธการ คำกลอน",
+      "note": "เบิกของออก",
+      "timestamp": "2026-09-16T11:54:13.045Z"
+    },
     {
       "id": "LOG-634629",
       "itemId": "ITM-040",
