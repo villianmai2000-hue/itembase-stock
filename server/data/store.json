@@ -811,7 +811,7 @@
       "id": "ITM-907",
       "name": "ตะปูคอนกรีตขาว 1นิ้ว (25mm.)",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
-      "quantity": 2,
+      "quantity": 4,
       "unit": "กล่อง",
       "minStock": 3,
       "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
@@ -823,7 +823,7 @@
       ],
       "note": "DEXZON",
       "qrCode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAARgAAAEYCAYAAACHjumMAAAAAklEQVR4AewaftIAAAWwSURBVO3BwY3lxpYFwNMXZQCX9IH+m5I+5DI90AiQA6yvOehXrYj49dffAlAwASiZAJRMAEomACUTgJIJQMkEoGQCUDIBKJkAlEwASiYAJROAkglAyQSgZAJQMgEomQCUTABKJgAlE4CSCUDJV4qu+wnfd/bKJ7juJ7/b2Svfcd1P+L6zVxomACUTgJIJQMkEoGQCUDIBKJkAlEwASiYAJROAkq98iLNX/mTX/eSnOXul4bqffIKzV/5k1/3kd5sAlEwASiYAJROAkglAyQSgZAJQMgEomQCUTABKvvIDXfeTT3D2yu923U8+wdkrf7LrfvIJzl75SSYAJROAkglAyQSgZAJQMgEomQCUTABKJgAlE4CSr/CfcvbKW9f9BP6NCUDJBKBkAlAyASiZAJRMAEomACUTgJIJQMkEoGQCUPIV/lOu+8lbZ6/AvzEBKJkAlEwASiYAJROAkglAyQSgZAJQMgEomQCUfOUHOnuF/83ZKw3X/eSts1d+mrNX+L4JQMkEoGQCUDIBKJkAlEwASiYAJROAkglAyQSg5Csf4rqf8Fmu+8lbZ6+8dd1P3jp7peW6n9A1ASiZAJRMAEomACUTgJIJQMkEoGQCUDIBKJkAlPz662/hx7ruJy1nr8C/MQEomQCUTABKJgAlE4CSCUDJBKBkAlAyASiZAJR8pei6n7x19spb1/3kT3b2yltnr3zHdT9puO4nb5290nLdT/5kZ6/8JBOAkglAyQSgZAJQMgEomQCUTABKJgAlE4CSCUDJBKDkK3+4s1d+mut+8tbZK99x9spb1/2k4bqffIKzV36a637ScPZKwwSgZAJQMgEomQCUTABKJgAlE4CSCUDJBKBkAlDylQ9x3U/eOnvlret+0nL2ylvX/aThup98x9krDWevvHXdT946e+U7rvvJW9f95K2zVxqu+0nL2Su/2wSgZAJQMgEomQCUTABKJgAlE4CSCUDJBKBkAlDylT/c2Svfcd1PGs5eeeu6n3yCs1feuu4nDdf9pOXslZ/m7JWfZAJQMgEomQCUTABKJgAlE4CSCUDJBKBkAlAyASj59dff8sNc95OWs1carvtJw9kr33HdT946e6Xhup+8dfZKy3U/eevslYbrftJy9srvNgEomQCUTABKJgAlE4CSCUDJBKBkAlAyASiZAJR85Qc6e+WnOXul4bqffMfZK29d95O3zl7hH9f95K2zV77jup+8dd1P3jp7pWECUDIBKJkAlEwASiYAJROAkglAyQSgZAJQMgEomQCU/Prrbym57id839krLdf95Hc7e+Wt637yHWevNFz3k7fOXvkE1/3krbNXGiYAJROAkglAyQSgZAJQMgEomQCUTABKJgAlE4CSr3yIs1f+ZNf9pOG6n3yCs1cazl5pue4nDdf9hH9MAEomACUTgJIJQMkEoGQCUDIBKJkAlEwASiYAJV/5ga77ySc4e+WnOXul4bqfvHX2ylvX/eQ7zl556+yVt677yVtnr/CPCUDJBKBkAlAyASiZAJRMAEomACUTgJIJQMkEoOQr/Kdc95O3zl5puO4nLdf9pOHslbeu+0nL2Ss/yQSgZAJQMgEomQCUTABKJgAlE4CSCUDJBKBkAlDyFfh/cPbKW9f95K2zV77jup/wOSYAJROAkglAyQSgZAJQMgEomQCUTABKJgAlE4CSCUDJV36gs1f4x9krn+C6nzRc95OWs1feuu4nP811P3nr7JWGCUDJBKBkAlAyASiZAJRMAEomACUTgJIJQMkEoOQrH+K6n/B91/3kE5y98tZ1P3nr7JVPcPZKw3U/aTl75XebAJRMAEomACUTgJIJQMkEoGQCUDIBKJkAlEwASn799bcAFEwASiYAJROAkglAyQSgZAJQMgEomQCUTABKJgAlE4CSCUDJBKBkAlAyASiZAJRMAEomACUTgJIJQMkEoOT/AOVNAlL1l8YwAAAAAElFTkSuQmCC",
-      "updatedAt": "2026-09-10T11:28:09.352Z",
+      "updatedAt": "2026-09-16T07:58:47.066Z",
       "updatedBy": "ยุทธการ คำกลอน"
     },
     {
@@ -978,6 +978,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-527066",
+      "itemId": "ITM-907",
+      "itemName": "ตะปูคอนกรีตขาว 1นิ้ว (25mm.)",
+      "type": "in",
+      "changeQty": 2,
+      "balanceQty": 4,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "referenceType": "transaction",
+      "referenceId": "ITM-907",
+      "user": "ยุทธการ คำกลอน",
+      "note": "รับของเข้าสต็อก",
+      "timestamp": "2026-09-16T07:58:47.066Z"
+    },
     {
       "id": "LOG-291881",
       "itemId": "ITM-047",
