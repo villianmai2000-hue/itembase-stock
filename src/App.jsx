@@ -47,6 +47,8 @@ export default function App() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [serverOnline, setServerOnline] = useState(true);
+  const [dbStatus, setDbStatus] = useState({ isCloud: false, persistent: false, mode: 'local_file' });
+  const [restoreCandidate, setRestoreCandidate] = useState(null);
 
   // Active User (Strictly authenticated user from login)
   const [currentUser, setCurrentUser] = useState(() => authUser ? authUser.name : 'ยุทธการ คำกลอน');
@@ -56,6 +58,19 @@ export default function App() {
       setCurrentUser(authUser.name);
     }
   }, [authUser]);
+
+  // Save offline mirror to browser localStorage
+  const saveOfflineSnapshot = (currentItems, currentLogs) => {
+    try {
+      if (Array.isArray(currentItems) && currentItems.length > 0) {
+        localStorage.setItem('itembase_offline_snapshot', JSON.stringify({
+          items: currentItems,
+          logs: currentLogs || logs,
+          savedAt: Date.now()
+        }));
+      }
+    } catch (e) {}
+  };
 
   // Modals state
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -119,18 +134,47 @@ export default function App() {
         return res.json();
       };
 
-      const [resTasks, resItems, resLogs, resSettings, resBranding] = await Promise.all([
+      const [resTasks, resItems, resLogs, resSettings, resBranding, resDbStatus] = await Promise.all([
         fetchJson('/api/tasks').catch(() => null),
         fetchJson('/api/items').catch(() => null),
         fetchJson('/api/logs').catch(() => null),
         fetchJson('/api/settings', { headers: reqHeaders }).catch(() => null),
         fetchJson('/api/settings/branding').catch(() => null),
+        fetchJson('/api/db-status').catch(() => null)
       ]);
+
+      if (resDbStatus) setDbStatus(resDbStatus);
 
       if (Array.isArray(resTasks)) setTasks(resTasks);
       if (Array.isArray(resItems)) {
         setItems(resItems);
         setServerOnline(true);
+
+        // Safety check: Detect if browser localStorage has newer edits that server might have lost due to restart
+        try {
+          const rawSnap = localStorage.getItem('itembase_offline_snapshot');
+          if (rawSnap) {
+            const snap = JSON.parse(rawSnap);
+            if (snap && Array.isArray(snap.items) && snap.items.length > 0) {
+              const hasMissingItems = snap.items.some(sItem => !resItems.some(rItem => rItem.id.toLowerCase() === sItem.id.toLowerCase()));
+              const hasNewerEdits = snap.items.some(sItem => {
+                const rItem = resItems.find(r => r.id.toLowerCase() === sItem.id.toLowerCase());
+                if (!rItem) return true;
+                return sItem.updatedAt && rItem.updatedAt && new Date(sItem.updatedAt) > new Date(rItem.updatedAt);
+              });
+
+              if (hasMissingItems || hasNewerEdits) {
+                console.warn('[Auto-Backup] Browser has newer updates than server!');
+                setRestoreCandidate(snap);
+              } else {
+                setRestoreCandidate(null);
+                saveOfflineSnapshot(resItems, resLogs);
+              }
+            }
+          } else {
+            saveOfflineSnapshot(resItems, resLogs);
+          }
+        } catch (e) {}
       } else {
         setServerOnline(false);
       }
@@ -154,7 +198,27 @@ export default function App() {
     }
   };
 
-
+  const handleRestoreFromSnapshot = async () => {
+    if (!restoreCandidate || !restoreCandidate.items) return;
+    try {
+      showToast('กำลังกู้คืนข้อมูลล่าสุดขึ้นเซิร์ฟเวอร์...');
+      const res = await fetch('/api/items/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: restoreCandidate.items,
+          logs: restoreCandidate.logs || []
+        })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'กู้คืนไม่สำเร็จ');
+      showToast(result.message || 'กู้คืนข้อมูลสำเร็จ!');
+      setRestoreCandidate(null);
+      await loadData();
+    } catch (err) {
+      alert(`⚠️ ${err.message}`);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -602,6 +666,7 @@ export default function App() {
         lowStockCount={lowStockCount}
         branding={branding}
         serverOnline={serverOnline}
+        dbStatus={dbStatus}
         onReconnect={() => loadData()}
         openAddModal={() => {
           setItemToEdit(null);
@@ -613,6 +678,32 @@ export default function App() {
         }}
         openMobileShareModal={() => setIsMobileShareOpen(true)}
       />
+
+      {/* Auto-Restore Banner when offline snapshot has newer edits than server */}
+      {restoreCandidate && (
+        <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-4 py-3 shadow-lg flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm font-medium z-30 animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⚡</span>
+            <span>
+              <strong>ตรวจพบข้อมูลที่คุณเคยบันทึกไว้ในเครื่อง:</strong> เซิร์ฟเวอร์เพิ่งรีสตาร์ต ข้อมูลบางส่วนอาจยังไม่ซิงค์ ต้องการกู้คืนข้อมูลล่าสุด ({restoreCandidate.items.length} รายการ) หรือไม่?
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRestoreFromSnapshot}
+              className="bg-white text-orange-700 hover:bg-orange-50 font-bold px-3 py-1.5 rounded-lg shadow transition text-xs"
+            >
+              กู้คืนและบันทึกขึ้นเซิร์ฟเวอร์ทันที
+            </button>
+            <button
+              onClick={() => setRestoreCandidate(null)}
+              className="text-amber-100 hover:text-white px-2 py-1 text-xs"
+            >
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      )}
 
 
       {/* Main Content Area */}
@@ -695,7 +786,7 @@ export default function App() {
             )}
 
             {activeTab === 'settings' && (
-            <SettingsPage
+              <SettingsPage
                 teamMembers={teamMembers}
                 locations={locations}
                 categories={categories}
@@ -708,6 +799,7 @@ export default function App() {
                 branding={branding}
                 currentUser={currentUser}
                 authUser={authUser}
+                dbStatus={dbStatus}
               />
             )}
           </>

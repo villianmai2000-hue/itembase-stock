@@ -5,7 +5,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { spawn } from 'child_process';
-import { readDb, saveDb, initDatabase, generateQRCode, resetDatabase } from './db.js';
+import { readDb, saveDb, initDatabase, generateQRCode, resetDatabase, getDbStatus } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +27,11 @@ app.use('/api', (req, res, next) => {
   res.setHeader('Expires', '0');
   res.setHeader('Surrogate-Control', 'no-store');
   next();
+});
+
+// Database status & persistence mode endpoint
+app.get('/api/db-status', (req, res) => {
+  res.json(getDbStatus());
 });
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
@@ -96,6 +101,40 @@ app.get('/api/items/:id', (req, res) => {
     return res.status(404).json({ error: 'ไม่พบข้อมูลวัสดุอุปกรณ์นี้ในระบบ' });
   }
   res.json(item);
+});
+
+// Sync / restore items from client backup if server restarted without cloud DB
+app.post('/api/items/sync', (req, res) => {
+  try {
+    const { items, logs } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'ไม่พบรายการข้อมูลที่จะซิงค์' });
+    }
+    const db = readDb();
+    let updatedCount = 0;
+    for (const clientItem of items) {
+      const idx = db.items.findIndex(i => i.id.toLowerCase() === clientItem.id.toLowerCase());
+      if (idx >= 0) {
+        db.items[idx] = { ...db.items[idx], ...clientItem };
+        updatedCount++;
+      } else {
+        db.items.unshift(clientItem);
+        updatedCount++;
+      }
+    }
+    if (Array.isArray(logs) && logs.length > 0) {
+      for (const clientLog of logs) {
+        if (!db.inventory_logs.some(l => l.id === clientLog.id)) {
+          db.inventory_logs.unshift(clientLog);
+        }
+      }
+    }
+    saveDb(db);
+    res.json({ message: `กู้คืนและซิงค์ข้อมูลสำเร็จ (${updatedCount} รายการ)`, items: db.items });
+  } catch (err) {
+    console.error('Error syncing items:', err);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการซิงค์ข้อมูล' });
+  }
 });
 
 // Add new item (with optional image upload or image URL – supports multiple images)

@@ -33,7 +33,8 @@ export default function SettingsPage({
   onSaveBranding,
   branding = {},
   currentUser,
-  authUser
+  authUser,
+  dbStatus = {}
 }) {
   const isAdmin = authUser?.isAdmin || currentUser === 'ยุทธการ คำกลอน';
   const [activeSubTab, setActiveSubTab] = useState('members'); // 'members', 'locations', 'categories', 'backup', 'branding'
@@ -705,6 +706,51 @@ export default function SettingsPage({
             <p className="text-xs text-slate-500">
               ดาวน์โหลดข้อมูลทั้งหมดเก็บไว้ หรือนำเข้าไฟล์สำรองเพื่อย้ายเครื่องใช้งาน
             </p>
+          </div>
+
+          {/* Cloud Database Persistence Status (MongoDB Atlas) */}
+          <div className={`p-4 rounded-xl border ${
+            dbStatus?.isCloud 
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
+              : 'bg-amber-50 border-amber-300 text-amber-900'
+          } space-y-2`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
+                <span className="text-base">{dbStatus?.isCloud ? '🟢' : '⚠️'}</span>
+                <span>
+                  {dbStatus?.isCloud 
+                    ? 'ฐานข้อมูลคลาวด์ถาวร: เชื่อมต่อ MongoDB Atlas สำเร็จ 100%' 
+                    : 'สถานะฐานข้อมูล: กำลังใช้พื้นที่จัดเก็บชั่วคราว (ยังไม่ได้เชื่อมต่อ MongoDB Atlas)'}
+                </span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                dbStatus?.isCloud ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'
+              }`}>
+                {dbStatus?.isCloud ? 'คลาวด์ถาวร 24 ชม.' : 'โหมดชั่วคราว'}
+              </span>
+            </div>
+
+            {dbStatus?.isCloud ? (
+              <p className="text-xs text-emerald-700 leading-relaxed">
+                ข้อมูลสต็อก, การตรวจนับ, งานทีม และรูปภาพทั้งหมดถูกบันทึกอย่างปลอดภัยลงบน <strong>MongoDB Atlas Cloud</strong> แบบถาวรเรียบร้อยแล้ว แม้เซิร์ฟเวอร์ Render.com จะปิด พักเครื่อง หรือรีสตาร์ต ข้อมูลก็จะยังคงอยู่อย่างสมบูรณ์ 100% ตลอดไป
+              </p>
+            ) : (
+              <div className="text-xs text-amber-800 space-y-2 pt-1">
+                <p className="leading-relaxed">
+                  เนื่องจากเซิร์ฟเวอร์ฟรีของ Render.com จะล้างไฟล์ในเครื่องเมื่อระบบพักเครื่องหลังจากไม่มีคนเข้าใช้ 15 นาที เพื่อให้ข้อมูลที่อัปเดตออนไลน์ <strong>ไม่หายถาวร</strong> แนะนำให้เชื่อมต่อกับ <strong>MongoDB Atlas (ฟรีตลอดชีพ 0 บาท)</strong>:
+                </p>
+                <div className="bg-white/80 p-3 rounded-lg border border-amber-200 space-y-1.5 text-[11px]">
+                  <p className="font-semibold text-slate-800">📌 วิธีเชื่อมต่อ MongoDB Atlas ฟรีใน 2 นาที:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-slate-600">
+                    <li>ไปที่เว็บไซต์ <a href="https://www.mongodb.com/cloud/atlas/register" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">mongodb.com/atlas</a> แล้วกดปุ่ม <strong>Sign up with Google</strong></li>
+                    <li>เลือกสร้างคลัสเตอร์แบบ <strong>M0 Free (ฟรีตลอดชีพ)</strong></li>
+                    <li>สร้างชื่อผู้ใช้และรหัสผ่านฐานข้อมูล (Database User)</li>
+                    <li>กดปุ่ม <strong>Connect</strong> เลือก <strong>Drivers</strong> แล้วคัดลอก Connection String (<code>mongodb+srv://...</code>)</li>
+                    <li>เข้าไปที่ <a href="https://dashboard.render.com" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">dashboard.render.com</a> เลือกเว็บของคุณ &gt; <strong>Environment</strong> &gt; เพิ่มตัวแปรชื่อ <code>MONGODB_URI</code> แล้ววางลิงก์ลงไป</li>
+                  </ol>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

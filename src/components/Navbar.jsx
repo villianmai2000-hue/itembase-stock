@@ -29,6 +29,7 @@ export default function Navbar({
   openScanModal,
   openMobileShareModal,
   serverOnline = true,
+  dbStatus = {},
   onReconnect
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -117,11 +118,21 @@ export default function Navbar({
             {/* Server Online/Offline Indicator */}
             {serverOnline ? (
               <div 
-                className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 border border-slate-700/80 text-emerald-400"
-                title={isCloudHost ? 'เชื่อมต่อระบบออนไลน์ 24 ชม. บนคลาวด์ Render สำเร็จ' : 'เชื่อมต่อเซิร์ฟเวอร์บนเครื่องนี้สำเร็จ'}
+                className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border ${
+                  dbStatus?.isCloud 
+                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-400' 
+                    : (isCloudHost ? 'bg-amber-950/40 border-amber-500/50 text-amber-300' : 'bg-slate-800/80 border-slate-700/80 text-emerald-400')
+                }`}
+                title={
+                  dbStatus?.isCloud 
+                    ? 'เชื่อมต่อฐานข้อมูลคลาวด์ถาวร (MongoDB Atlas) สำเร็จ ข้อมูลจะไม่มีวันสูญหาย' 
+                    : (isCloudHost ? 'เว็บไซต์ออนไลน์แล้ว แต่ยังใช้พื้นที่ชั่วคราว แนะนำเชื่อมต่อ MongoDB Atlas' : 'เชื่อมต่อเซิร์ฟเวอร์บนเครื่องนี้สำเร็จ')
+                }
               >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>{isCloudHost ? 'ออนไลน์ 24 ชม.' : 'เชื่อมต่อปกติ'}</span>
+                <span className={`w-2 h-2 rounded-full animate-pulse ${dbStatus?.isCloud ? 'bg-emerald-400' : (isCloudHost ? 'bg-amber-400' : 'bg-emerald-400')}`}></span>
+                <span>
+                  {dbStatus?.isCloud ? '🟢 คลาวด์ถาวร 24 ชม.' : (isCloudHost ? '🟡 ออนไลน์ (รอต่อคลาวด์ถาวร)' : '🟢 เชื่อมต่อเครื่องนี้')}
+                </span>
               </div>
             ) : (
               <button

@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import QRCode from 'qrcode';
+import { MongoClient } from 'mongodb';
+import 'dotenv/config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +11,14 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'store.json');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
+
+let cachedDb = null;
+let mongoClient = null;
+let mongoCollection = null;
+let isMongoConnected = false;
+let mongoConnectingPromise = null;
+
+const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -209,36 +219,137 @@ export async function generateQRCode(text) {
   }
 }
 
-// Read DB
-export function readDb() {
+// Connect to MongoDB Atlas (if MONGODB_URI configured)
+export async function connectMongo() {
+  if (!MONGODB_URI) return null;
+  if (mongoCollection && isMongoConnected) return mongoCollection;
+  if (mongoConnectingPromise) return mongoConnectingPromise;
+
+  mongoConnectingPromise = (async () => {
+    try {
+      console.log('[MongoDB] กำลังเชื่อมต่อกับ MongoDB Atlas Cloud Database...');
+      mongoClient = new MongoClient(MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 10000
+      });
+      await mongoClient.connect();
+      const dbName = process.env.MONGODB_DB || 'itembase';
+      const db = mongoClient.db(dbName);
+      mongoCollection = db.collection('store');
+      isMongoConnected = true;
+      console.log('✅ [MongoDB] เชื่อมต่อ MongoDB Atlas สำเร็จ! ฐานข้อมูลคลาวด์ถาวรพร้อมใช้งานตลอด 24 ชม.');
+      return mongoCollection;
+    } catch (err) {
+      console.warn('⚠️ [MongoDB] เชื่อมต่อ MongoDB ไม่สำเร็จ กำลังใช้ไฟล์บนเครื่องแทน:', err.message);
+      isMongoConnected = false;
+      mongoCollection = null;
+      return null;
+    } finally {
+      mongoConnectingPromise = null;
+    }
+  })();
+
+  return mongoConnectingPromise;
+}
+
+// Read local file fallback
+function readLocalDb() {
   if (!fs.existsSync(DB_FILE)) {
-    saveDb(defaultSeed);
+    saveLocalDb(defaultSeed);
     return defaultSeed;
   }
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     return JSON.parse(raw);
   } catch (err) {
-    console.error('Error reading db:', err);
+    console.error('Error reading local db:', err);
     return defaultSeed;
   }
 }
 
-// Save DB safely
-export function saveDb(data) {
+// Save local file
+function saveLocalDb(data) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Error saving db:', err);
-    throw err;
+    console.error('Error saving local db:', err);
   }
 }
 
-// Initialize seed with QR codes if not present
-export async function initDatabase() {
-  const data = readDb();
-  let modified = false;
+// Read DB (Memory -> Cloud/Local)
+export function readDb() {
+  if (cachedDb) {
+    return cachedDb;
+  }
+  cachedDb = readLocalDb();
+  return cachedDb;
+}
 
+// Save DB (Memory + Local File + Cloud MongoDB)
+export function saveDb(data) {
+  cachedDb = data;
+  saveLocalDb(data);
+
+  // Sync to MongoDB Atlas asynchronously
+  if (mongoCollection && isMongoConnected) {
+    mongoCollection.replaceOne(
+      { _id: 'main_store' },
+      { _id: 'main_store', ...data, savedAt: new Date().toISOString() },
+      { upsert: true }
+    ).catch(err => {
+      console.error('⚠️ [MongoDB] Async save error:', err.message);
+    });
+  } else if (MONGODB_URI) {
+    // Try reconnecting in background and save
+    connectMongo().then(col => {
+      if (col) {
+        col.replaceOne(
+          { _id: 'main_store' },
+          { _id: 'main_store', ...data, savedAt: new Date().toISOString() },
+          { upsert: true }
+        ).catch(() => {});
+      }
+    });
+  }
+}
+
+// Initialize database with QR codes & Cloud Sync
+export async function initDatabase() {
+  // 1. Read local file as base
+  let data = readLocalDb();
+
+  // 2. If MONGODB_URI is provided, sync from MongoDB Atlas
+  if (MONGODB_URI) {
+    try {
+      const col = await connectMongo();
+      if (col) {
+        const doc = await col.findOne({ _id: 'main_store' });
+        if (doc && Array.isArray(doc.items) && doc.items.length > 0) {
+          // Cloud MongoDB has data! Use it as source of truth
+          const { _id, ...cleanData } = doc;
+          data = cleanData;
+          saveLocalDb(data);
+          console.log(`✅ [MongoDB] โหลดข้อมูล ${data.items.length} รายการจาก MongoDB Atlas เรียบร้อย!`);
+        } else {
+          // MongoDB is empty: seed it with local data
+          console.log('[MongoDB] ฐานข้อมูลคลาวด์ยังว่างอยู่ กำลังอัปโหลดข้อมูลเริ่มต้นขึ้นคลาวด์...');
+          await col.replaceOne(
+            { _id: 'main_store' },
+            { _id: 'main_store', ...data, updatedAt: new Date().toISOString() },
+            { upsert: true }
+          );
+          console.log(`✅ [MongoDB] บันทึกข้อมูลเริ่มต้น ${data.items.length} รายการขึ้น MongoDB Atlas สำเร็จ!`);
+        }
+      }
+    } catch (err) {
+      console.error('⚠️ [MongoDB] Init sync failed:', err.message);
+    }
+  }
+
+  cachedDb = data;
+
+  // Ensure QR codes exist
+  let modified = false;
   for (let item of data.items) {
     if (!item.qrCode) {
       item.qrCode = await generateQRCode(item.id);
@@ -260,4 +371,15 @@ export async function resetDatabase() {
   }
   saveDb(cloned);
   return cloned;
+}
+
+// Get DB status (for UI display and diagnostics)
+export function getDbStatus() {
+  return {
+    isCloud: isMongoConnected,
+    mode: isMongoConnected ? 'mongodb_atlas' : (MONGODB_URI ? 'connecting_mongodb' : 'local_file'),
+    persistent: isMongoConnected,
+    itemCount: cachedDb ? (cachedDb.items?.length || 0) : 0,
+    hasMongoUri: !!MONGODB_URI
+  };
 }
