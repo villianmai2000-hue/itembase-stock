@@ -59,6 +59,24 @@
   ],
   "items": [
     {
+      "id": "ITM-044",
+      "name": "ซีเมนต์กันซึม 226 LANKO 226",
+      "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
+      "quantity": 4,
+      "unit": "ถุง/กระสอบ",
+      "minStock": 2,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "image": "/uploads/item-1789543931624-796488876.jpg",
+      "images": [
+        "/uploads/item-1789543931624-796488876.jpg"
+      ],
+      "note": "",
+      "qrCode": "data:image/png;base64,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",
+      "updatedAt": "2026-09-16T07:32:12.280Z",
+      "updatedBy": "ยุทธการ คำกลอน"
+    },
+    {
       "id": "ITM-210",
       "name": "น้ำยากันซึม LANKO 226",
       "category": "หมวดวัสดุเหลือใช้และเคมีภัณฑ์ (Leftover Materials & Chemicals)",
@@ -900,6 +918,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-932280",
+      "itemId": "ITM-044",
+      "itemName": "ซีเมนต์กันซึม 226 LANKO 226",
+      "type": "add",
+      "changeQty": 4,
+      "balanceQty": 4,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "-",
+      "referenceType": "manual",
+      "referenceId": "-",
+      "user": "ยุทธการ คำกลอน",
+      "note": "ลงทะเบียนวัสดุอุปกรณ์ใหม่: ซีเมนต์กันซึม 226 LANKO 226",
+      "timestamp": "2026-09-16T07:32:12.280Z"
+    },
     {
       "id": "LOG-866183",
       "itemId": "ITM-210",
