@@ -815,7 +815,7 @@
       "id": "ITM-008",
       "name": "ปูนฉาบสำเร็จทีพีไอ FL.1",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
-      "quantity": 9,
+      "quantity": 74,
       "unit": "ถุง/กระสอบ",
       "minStock": 30,
       "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
@@ -826,7 +826,7 @@
       ],
       "note": "TPI m200",
       "qrCode": "data:image/png;base64,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",
-      "updatedAt": "2026-09-10T11:30:52.758Z",
+      "updatedAt": "2026-09-16T07:23:15.057Z",
       "updatedBy": "ยุทธการ คำกลอน"
     },
     {
@@ -881,6 +881,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-395057",
+      "itemId": "ITM-008",
+      "itemName": "ปูนฉาบสำเร็จทีพีไอ FL.1",
+      "type": "in",
+      "changeQty": 65,
+      "balanceQty": 74,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "referenceType": "transaction",
+      "referenceId": "ITM-008",
+      "user": "ยุทธการ คำกลอน",
+      "note": "รับของเข้าสต็อก",
+      "timestamp": "2026-09-16T07:23:15.057Z"
+    },
     {
       "id": "LOG-445577",
       "itemId": "ITM-043",
