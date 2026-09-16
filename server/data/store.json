@@ -59,6 +59,26 @@
   ],
   "items": [
     {
+      "id": "ITM-049",
+      "name": "ดอกสว่านเจาะปูนโรตารี่ 6mm. X L 160mm.",
+      "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
+      "quantity": 5,
+      "unit": "ตัว",
+      "minStock": 1,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "image": "/uploads/item-1789545839609-500057771.jpg",
+      "images": [
+        "/uploads/item-1789545839609-500057771.jpg",
+        "/uploads/item-1789545840181-156658154.jpg",
+        "/uploads/item-1789545840282-297090279.jpg"
+      ],
+      "note": "ROVEL",
+      "qrCode": "data:image/png;base64,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",
+      "updatedAt": "2026-09-16T08:04:00.781Z",
+      "updatedBy": "ยุทธการ คำกลอน"
+    },
+    {
       "id": "ITM-048",
       "name": "ตะปูคอนกรีต 1.5นิ้ว 38mm.",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
@@ -996,6 +1016,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-840781",
+      "itemId": "ITM-049",
+      "itemName": "ดอกสว่านเจาะปูนโรตารี่ 6mm. X L 160mm.",
+      "type": "add",
+      "changeQty": 5,
+      "balanceQty": 5,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "-",
+      "referenceType": "manual",
+      "referenceId": "-",
+      "user": "ยุทธการ คำกลอน",
+      "note": "ลงทะเบียนวัสดุอุปกรณ์ใหม่: ดอกสว่านเจาะปูนโรตารี่ 6mm. X L 160mm.",
+      "timestamp": "2026-09-16T08:04:00.781Z"
+    },
     {
       "id": "LOG-604381",
       "itemId": "ITM-048",
