@@ -952,7 +952,7 @@
       "id": "ITM-010",
       "name": "Sika Tile-360 ปูนกาว FL.1",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
-      "quantity": 42,
+      "quantity": 27,
       "unit": "ถุง/กระสอบ",
       "minStock": 20,
       "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
@@ -963,7 +963,7 @@
       ],
       "note": "Sika",
       "qrCode": "data:image/png;base64,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",
-      "updatedAt": "2026-09-10T11:30:20.776Z",
+      "updatedAt": "2026-09-16T11:52:34.157Z",
       "updatedBy": "ยุทธการ คำกลอน"
     },
     {
@@ -1036,6 +1036,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-554157",
+      "itemId": "ITM-010",
+      "itemName": "Sika Tile-360 ปูนกาว FL.1",
+      "type": "out",
+      "changeQty": -15,
+      "balanceQty": 27,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "referenceType": "transaction",
+      "referenceId": "ITM-010",
+      "user": "ยุทธการ คำกลอน",
+      "note": "เบิกของออก",
+      "timestamp": "2026-09-16T11:52:34.157Z"
+    },
     {
       "id": "LOG-601690",
       "itemId": "ITM-050",
