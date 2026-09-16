@@ -18,7 +18,8 @@ import {
   Lock,
   Eye,
   EyeOff,
-  KeyRound
+  KeyRound,
+  RefreshCw
 } from 'lucide-react';
 
 export default function SettingsPage({ 
@@ -95,6 +96,28 @@ export default function SettingsPage({
   // Success message
   const [saveMessage, setSaveMessage] = useState('');
 
+  // GitHub sync state
+  const [isSyncingGitHub, setIsSyncingGitHub] = useState(false);
+  const [syncMessage, setSyncMessage] = useState(null);
+
+  const handleManualSyncGitHub = async () => {
+    setIsSyncingGitHub(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch('/api/github/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setSyncMessage({ type: 'success', text: '✅ ซิงค์ข้อมูลขึ้น GitHub สำเร็จแล้ว!' });
+      } else {
+        setSyncMessage({ type: 'error', text: `⚠️ ไม่สามารถซิงค์ได้: ${data.error || 'กรุณาตรวจสอบ GITHUB_TOKEN'}` });
+      }
+    } catch (e) {
+      setSyncMessage({ type: 'error', text: `⚠️ การเชื่อมต่อล้มเหลว: ${e.message}` });
+    } finally {
+      setIsSyncingGitHub(false);
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
 
   const showSaved = (msg) => {
     setSaveMessage(msg);
@@ -708,47 +731,107 @@ export default function SettingsPage({
             </p>
           </div>
 
-          {/* Cloud Database Persistence Status (MongoDB Atlas) */}
+          {/* Cloud Database Persistence Status (GitHub / MongoDB Atlas) */}
           <div className={`p-4 rounded-xl border ${
             dbStatus?.isCloud 
               ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
               : 'bg-amber-50 border-amber-300 text-amber-900'
-          } space-y-2`}>
+          } space-y-3`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
                 <span className="text-base">{dbStatus?.isCloud ? '🟢' : '⚠️'}</span>
                 <span>
                   {dbStatus?.isCloud 
-                    ? 'ฐานข้อมูลคลาวด์ถาวร: เชื่อมต่อ MongoDB Atlas สำเร็จ 100%' 
-                    : 'สถานะฐานข้อมูล: กำลังใช้พื้นที่จัดเก็บชั่วคราว (ยังไม่ได้เชื่อมต่อ MongoDB Atlas)'}
+                    ? `ฐานข้อมูลคลาวด์ถาวร: เชื่อมต่อ ${dbStatus?.provider || 'GitHub'} สำเร็จ 100%` 
+                    : 'สถานะฐานข้อมูล: จัดเก็บชั่วคราว (ยังไม่ได้เชื่อมต่อ GitHub เพื่อบันทึกถาวร)'}
                 </span>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                 dbStatus?.isCloud ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'
               }`}>
-                {dbStatus?.isCloud ? 'คลาวด์ถาวร 24 ชม.' : 'โหมดชั่วคราว'}
+                {dbStatus?.isCloud ? `คลาวด์ถาวร (${dbStatus?.provider || 'GitHub'})` : 'โหมดชั่วคราว'}
               </span>
             </div>
 
             {dbStatus?.isCloud ? (
-              <p className="text-xs text-emerald-700 leading-relaxed">
-                ข้อมูลสต็อก, การตรวจนับ, งานทีม และรูปภาพทั้งหมดถูกบันทึกอย่างปลอดภัยลงบน <strong>MongoDB Atlas Cloud</strong> แบบถาวรเรียบร้อยแล้ว แม้เซิร์ฟเวอร์ Render.com จะปิด พักเครื่อง หรือรีสตาร์ต ข้อมูลก็จะยังคงอยู่อย่างสมบูรณ์ 100% ตลอดไป
-              </p>
-            ) : (
-              <div className="text-xs text-amber-800 space-y-2 pt-1">
-                <p className="leading-relaxed">
-                  เนื่องจากเซิร์ฟเวอร์ฟรีของ Render.com จะล้างไฟล์ในเครื่องเมื่อระบบพักเครื่องหลังจากไม่มีคนเข้าใช้ 15 นาที เพื่อให้ข้อมูลที่อัปเดตออนไลน์ <strong>ไม่หายถาวร</strong> แนะนำให้เชื่อมต่อกับ <strong>MongoDB Atlas (ฟรีตลอดชีพ 0 บาท)</strong>:
+              <div className="space-y-2">
+                <p className="text-xs text-emerald-700 leading-relaxed">
+                  ข้อมูลสต็อก, การตรวจนับ, งานทีม และรูปภาพทั้งหมดถูกบันทึกอย่างปลอดภัยลงบน <strong>{dbStatus?.provider === 'GitHub' ? `GitHub (${dbStatus?.gitHubRepo || 'itembase-stock'} branch: ${dbStatus?.gitHubBranch || 'data'})` : 'MongoDB Atlas Cloud'}</strong> แบบถาวรเรียบร้อยแล้ว แม้เซิร์ฟเวอร์ Render.com จะปิด พักเครื่อง หรือรีสตาร์ต ข้อมูลก็จะยังคงอยู่อย่างสมบูรณ์ 100% ตลอดไป
                 </p>
-                <div className="bg-white/80 p-3 rounded-lg border border-amber-200 space-y-1.5 text-[11px]">
-                  <p className="font-semibold text-slate-800">📌 วิธีเชื่อมต่อ MongoDB Atlas ฟรีใน 2 นาที:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-slate-600">
-                    <li>ไปที่เว็บไซต์ <a href="https://www.mongodb.com/cloud/atlas/register" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">mongodb.com/atlas</a> แล้วกดปุ่ม <strong>Sign up with Google</strong></li>
-                    <li>เลือกสร้างคลัสเตอร์แบบ <strong>M0 Free (ฟรีตลอดชีพ)</strong></li>
-                    <li>สร้างชื่อผู้ใช้และรหัสผ่านฐานข้อมูล (Database User)</li>
-                    <li>กดปุ่ม <strong>Connect</strong> เลือก <strong>Drivers</strong> แล้วคัดลอก Connection String (<code>mongodb+srv://...</code>)</li>
-                    <li>เข้าไปที่ <a href="https://dashboard.render.com" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">dashboard.render.com</a> เลือกเว็บของคุณ &gt; <strong>Environment</strong> &gt; เพิ่มตัวแปรชื่อ <code>MONGODB_URI</code> แล้ววางลิงก์ลงไป</li>
+                {dbStatus?.gitHubLastSync && (
+                  <p className="text-[11px] text-emerald-600">
+                    🕒 ซิงค์กับ GitHub ล่าสุดเมื่อ: {new Date(dbStatus.gitHubLastSync).toLocaleString('th-TH')}
+                  </p>
+                )}
+                {dbStatus?.provider === 'GitHub' && (
+                  <div className="pt-1 flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={handleManualSyncGitHub}
+                      disabled={isSyncingGitHub}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow transition disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGitHub ? 'animate-spin' : ''}`} />
+                      <span>{isSyncingGitHub ? 'กำลังซิงค์...' : 'กดซิงค์กับ GitHub เดี๋ยวนี้'}</span>
+                    </button>
+                    {syncMessage && (
+                      <span className={`text-xs ${syncMessage.type === 'success' ? 'text-emerald-700 font-semibold' : 'text-red-600'}`}>
+                        {syncMessage.text}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-xs text-amber-900 space-y-3 pt-1">
+                <p className="leading-relaxed">
+                  เนื่องจากเซิร์ฟเวอร์ Render.com จะล้างไฟล์ในเครื่องเมื่อระบบพักเครื่องหลังจากไม่มีคนเข้าใช้ 15 นาที เพื่อให้ข้อมูลที่อัปเดตออนไลน์ <strong>ไม่หายถาวร</strong> คุณสามารถใช้ <strong>GitHub เดิมของคุณเป็นฐานข้อมูลคลาวด์ถาวรได้ทันที (ไม่ต้องสมัครเว็บอื่นเพิ่ม!)</strong>:
+                </p>
+
+                {/* Option 1: GitHub (Recommended) */}
+                <div className="bg-white/90 p-3.5 rounded-xl border border-amber-300 shadow-sm space-y-2.5 text-[12px]">
+                  <div className="flex items-center gap-2 font-bold text-slate-800 text-xs sm:text-sm">
+                    <span className="text-amber-600">🌟</span>
+                    <span>วิธีใช้ GitHub เดิมเป็นฐานข้อมูลคลาวด์ถาวร (ทำเพียง 1 นาที):</span>
+                  </div>
+                  <ol className="list-decimal list-inside space-y-1.5 text-slate-700 leading-relaxed">
+                    <li>
+                      ไปที่ <a href="https://github.com/settings/tokens/new?scopes=repo&description=itembase-stock-cloud-db" target="_blank" rel="noreferrer" className="text-blue-600 font-semibold underline hover:text-blue-700">คลิกที่นี่เพื่อสร้าง GitHub Token (เปิดหน้าตั้งค่าทันที)</a>
+                    </li>
+                    <li>
+                      พิมพ์ชื่อ Note สั้นๆ เช่น <code>itembase-token</code> และเลือกติ๊กถูกที่ช่อง <strong>repo</strong> (เข้าถึงคลังโค้ดเพื่อบันทึกข้อมูล) จากนั้นเลื่อนลงล่างสุดแล้วกดปุ่มสีเขียว <strong>Generate token</strong>
+                    </li>
+                    <li>
+                      คัดลอกรหัสโทเค็นที่ได้ (จะขึ้นต้นด้วย <code>ghp_...</code>)
+                    </li>
+                    <li>
+                      เปิด <a href="https://dashboard.render.com" target="_blank" rel="noreferrer" className="text-blue-600 font-semibold underline hover:text-blue-700">dashboard.render.com</a> &gt; คลิกที่เว็บ <strong>itembase-stock</strong> &gt; เมนู <strong>Environment</strong>
+                    </li>
+                    <li>
+                      กด <strong>Add Environment Variable</strong> แล้วกรอก:
+                      <div className="mt-1 ml-4 p-2.5 bg-slate-100 rounded-lg border border-slate-300 font-mono text-[11px] text-slate-800">
+                        Key: <strong>GITHUB_TOKEN</strong><br/>
+                        Value: <em>วางรหัส ghp_... ที่คัดลอกมา</em>
+                      </div>
+                    </li>
+                    <li>
+                      กดปุ่ม <strong>Save Changes</strong> — เสร็จเรียบร้อย! ระบบจะเชื่อมต่อ GitHub เดิมของคุณและบันทึกข้อมูลลง GitHub อัตโนมัติตลอด 24 ชม.
+                    </li>
                   </ol>
                 </div>
+
+                {/* Option 2: MongoDB (Alternative) */}
+                <details className="text-[11px] text-slate-600 pt-1">
+                  <summary className="cursor-pointer font-semibold text-slate-700 hover:text-slate-900">
+                    หรือต้องการเชื่อมต่อด้วย MongoDB Atlas แทน? (คลิกเพื่อดูวิธี)
+                  </summary>
+                  <div className="bg-white/70 p-3 rounded-lg border border-slate-200 space-y-1 mt-2">
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>สมัครที่ <a href="https://www.mongodb.com/cloud/atlas/register" target="_blank" rel="noreferrer" className="text-blue-600 underline">mongodb.com/atlas</a> แล้วสร้าง Free M0 Cluster</li>
+                      <li>คัดลอก Connection String (<code>mongodb+srv://...</code>)</li>
+                      <li>ใส่ใน Render Dashboard เมนู Environment ตัวแปรชื่อ <code>MONGODB_URI</code></li>
+                    </ol>
+                  </div>
+                </details>
               </div>
             )}
           </div>

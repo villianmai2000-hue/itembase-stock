@@ -1,4 +1,4 @@
-﻿# 🌐 คู่มือการนำ ItemBase ขึ้นออนไลน์ 24 ชั่วโมง (Cloud Deployment)
+# 🌐 คู่มือการนำ ItemBase ขึ้นออนไลน์ 24 ชั่วโมง (Cloud Deployment)
 
 ## 📌 สรุปหลักการ
 เพื่อให้ระบบทำงานได้ตลอดเวลา **โดยไม่ต้องเปิดคอมพิวเตอร์ทิ้งไว้** และให้ค้นหาใน Google เจอ:
@@ -42,3 +42,29 @@
    - เพิ่มชื่อโดเมนของคุณ
    - ส่งไฟล์ Sitemap: `https://ชื่อโดเมนของคุณ/sitemap.xml`
    - รอ Google ตรวจสอบ 1-3 วัน จากนั้นเมื่อพิมพ์ค้นหาชื่อบน Google ก็จะเจอหน้าเว็บของคุณทันที
+
+---
+
+## 💾 วิธีทำให้ข้อมูลออนไลน์ไม่หาย: ใช้ GitHub เดิมเป็นคลาวด์ถาวร 24 ชม.
+
+เนื่องจาก Render.com แพ็กเกจฟรีจะพักเครื่อง (Sleep) หากไม่มีการใช้งาน 15 นาที และจะล้างไฟล์ในดิสก์ทิ้งเมื่อพักเครื่อง  
+เพื่อให้ข้อมูลที่ลงไว้ **ไม่หายถาวร** คุณสามารถใช้ **GitHub เดิม** เป็นที่เก็บข้อมูลได้ทันที (ทำเพียง 1 นาที):
+
+1. **สร้าง GitHub Personal Access Token**:
+   - ไปที่ลิงก์นี้โดยตรง: [github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo&description=itembase-stock-cloud-db)
+   - ช่อง Note ใส่ชื่อ: `itembase-token`
+   - ติ๊กถูกที่ช่อง **repo** (Full control of private/public repositories)
+   - เลื่อนลงด้านล่างสุด กดปุ่มสีเขียว **Generate token**
+   - **คัดลอกรหัสโทเค็นทันที** (ขึ้นต้นด้วย `ghp_...`)
+
+2. **ใส่รหัสใน Render Dashboard**:
+   - ไปที่ [dashboard.render.com](https://dashboard.render.com)
+   - คลิกเลือกเว็บของคุณ: **itembase-stock**
+   - เมนูด้านซ้าย เลือก **Environment**
+   - กดปุ่ม **Add Environment Variable**
+   - ใส่ข้อมูล:
+     - **Key**: `GITHUB_TOKEN`
+     - **Value**: วางรหัส `ghp_...` ที่คัดลอกมา
+   - กด **Save Changes**
+
+🎉 **เรียบร้อย 100%!** ระบบจะเชื่อมต่อกับ GitHub เดิมของคุณทันที ทุกครั้งที่มีการแก้ไข/เบิก/ลงสต็อก ข้อมูลจะถูกบันทึกลงบน GitHub ตลอดไป ไม่มีวันหายอีกแล้วครับ!

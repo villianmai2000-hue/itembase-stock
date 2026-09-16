@@ -5,7 +5,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { spawn } from 'child_process';
-import { readDb, saveDb, initDatabase, generateQRCode, resetDatabase, getDbStatus } from './db.js';
+import { readDb, saveDb, initDatabase, generateQRCode, resetDatabase, getDbStatus, syncGitHubNow } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +32,19 @@ app.use('/api', (req, res, next) => {
 // Database status & persistence mode endpoint
 app.get('/api/db-status', (req, res) => {
   res.json(getDbStatus());
+});
+
+// Force manual sync to GitHub Cloud Database endpoint
+app.post('/api/github/sync', async (req, res) => {
+  try {
+    const result = await syncGitHubNow();
+    res.json({
+      ...result,
+      dbStatus: getDbStatus()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');

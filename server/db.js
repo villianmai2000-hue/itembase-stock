@@ -19,6 +19,18 @@ let isMongoConnected = false;
 let mongoConnectingPromise = null;
 
 const MONGODB_URI = process.env.MONGODB_URI;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN ? process.env.GITHUB_TOKEN.trim() : null;
+const GITHUB_REPO = process.env.GITHUB_REPO ? process.env.GITHUB_REPO.trim() : 'villianmai2000-hue/itembase-stock';
+const GITHUB_BRANCH = process.env.GITHUB_BRANCH ? process.env.GITHUB_BRANCH.trim() : 'data';
+const GITHUB_FILE_PATH = 'server/data/store.json';
+
+let isGitHubConnected = false;
+let gitHubSha = null;
+let gitHubLastSync = null;
+let gitHubSyncError = null;
+let syncTimer = null;
+let isSyncingToGitHub = false;
+let pendingGitHubSync = false;
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -219,6 +231,181 @@ export async function generateQRCode(text) {
   }
 }
 
+// ====================================================
+// GitHub Cloud Database Integration
+// ====================================================
+
+// Fetch store.json from GitHub branch (defaults to 'data' branch)
+export async function fetchFromGitHub() {
+  try {
+    const headers = {
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'itembase-stock-app'
+    };
+    if (GITHUB_TOKEN) {
+      headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
+    }
+
+    console.log(`[GitHub DB] กำลังดึงข้อมูลจาก GitHub (${GITHUB_REPO}, branch: ${GITHUB_BRANCH})...`);
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`, {
+      headers
+    });
+
+    if (res.status === 200) {
+      const data = await res.json();
+      gitHubSha = data.sha;
+      const rawContent = Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf-8');
+      const parsed = JSON.parse(rawContent);
+      if (parsed && Array.isArray(parsed.items)) {
+        isGitHubConnected = !!GITHUB_TOKEN;
+        gitHubSyncError = null;
+        gitHubLastSync = new Date().toISOString();
+        console.log(`✅ [GitHub DB] โหลดข้อมูล ${parsed.items.length} รายการจาก GitHub สำเร็จ! (SHA: ${gitHubSha.slice(0, 7)})`);
+        return parsed;
+      }
+    } else if (res.status === 404) {
+      console.log(`ℹ️ [GitHub DB] ยังไม่พบไฟล์บน branch "${GITHUB_BRANCH}" (จะสร้างให้อัตโนมัติเมื่อบันทึก)`);
+      return null;
+    } else {
+      const errText = await res.text();
+      console.warn(`⚠️ [GitHub DB] ดึงข้อมูลไม่สำเร็จ (HTTP ${res.status}):`, errText);
+      gitHubSyncError = `HTTP ${res.status}`;
+      return null;
+    }
+  } catch (err) {
+    console.error('⚠️ [GitHub DB] เกิดข้อผิดพลาดในการเชื่อมต่อ GitHub:', err.message);
+    gitHubSyncError = err.message;
+    return null;
+  }
+}
+
+// Push store.json to GitHub branch
+export async function pushToGitHub(data) {
+  if (!GITHUB_TOKEN) {
+    return { success: false, error: 'ไม่มี GITHUB_TOKEN' };
+  }
+
+  if (isSyncingToGitHub) {
+    pendingGitHubSync = true;
+    return { success: false, pending: true };
+  }
+
+  isSyncingToGitHub = true;
+  pendingGitHubSync = false;
+
+  try {
+    // If SHA is missing, fetch current SHA first
+    if (!gitHubSha) {
+      try {
+        const checkRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`, {
+          headers: {
+            'Authorization': `Bearer ${GITHUB_TOKEN}`,
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'itembase-stock-app'
+          }
+        });
+        if (checkRes.status === 200) {
+          const fileInfo = await checkRes.json();
+          gitHubSha = fileInfo.sha;
+        }
+      } catch (e) {
+        console.warn('[GitHub DB] ไม่สามารถดึง SHA ล่าสุดได้:', e.message);
+      }
+    }
+
+    const jsonStr = JSON.stringify(data, null, 2);
+    const contentBase64 = Buffer.from(jsonStr, 'utf-8').toString('base64');
+
+    const body = {
+      message: `Update stock via web app [skip ci] (${new Date().toLocaleString('th-TH')})`,
+      content: contentBase64,
+      branch: GITHUB_BRANCH
+    };
+    if (gitHubSha) {
+      body.sha = gitHubSha;
+    }
+
+    const putRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${GITHUB_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'itembase-stock-app',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (putRes.status === 200 || putRes.status === 201) {
+      const resData = await putRes.json();
+      gitHubSha = resData.content?.sha || gitHubSha;
+      gitHubLastSync = new Date().toISOString();
+      isGitHubConnected = true;
+      gitHubSyncError = null;
+      console.log(`✅ [GitHub DB] บันทึกข้อมูลขึ้น GitHub สำเร็จ! (Commit SHA: ${resData.commit?.sha?.slice(0, 7) || 'ok'})`);
+      return { success: true, sha: gitHubSha };
+    } else if (putRes.status === 409) {
+      // 409 Conflict: Refresh SHA and retry once
+      console.warn('[GitHub DB] เกิดข้อขัดแย้ง SHA (409 Conflict) กำลังดึง SHA ล่าสุดและลองใหม่อีกครั้ง...');
+      const checkRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`, {
+        headers: {
+          'Authorization': `Bearer ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'itembase-stock-app'
+        }
+      });
+      if (checkRes.status === 200) {
+        const fileInfo = await checkRes.json();
+        gitHubSha = fileInfo.sha;
+        body.sha = gitHubSha;
+
+        const retryRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${GITHUB_TOKEN}`,
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'itembase-stock-app',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (retryRes.status === 200 || retryRes.status === 201) {
+          const resData = await retryRes.json();
+          gitHubSha = resData.content?.sha || gitHubSha;
+          gitHubLastSync = new Date().toISOString();
+          isGitHubConnected = true;
+          gitHubSyncError = null;
+          console.log(`✅ [GitHub DB Retry] บันทึกข้อมูลขึ้น GitHub สำเร็จหลังลองใหม่!`);
+          return { success: true, sha: gitHubSha };
+        }
+      }
+      return { success: false, error: 'SHA conflict retry failed' };
+    } else {
+      const errText = await putRes.text();
+      console.error(`⚠️ [GitHub DB] บันทึกขึ้น GitHub ไม่สำเร็จ (HTTP ${putRes.status}):`, errText);
+      gitHubSyncError = `HTTP ${putRes.status}`;
+      return { success: false, error: `HTTP ${putRes.status}` };
+    }
+  } catch (err) {
+    console.error('⚠️ [GitHub DB] ข้อยกเว้นในการบันทึกขึ้น GitHub:', err.message);
+    gitHubSyncError = err.message;
+    return { success: false, error: err.message };
+  } finally {
+    isSyncingToGitHub = false;
+    if (pendingGitHubSync) {
+      pendingGitHubSync = false;
+      setTimeout(() => pushToGitHub(cachedDb || readLocalDb()), 500);
+    }
+  }
+}
+
+// Manual force sync to GitHub
+export async function syncGitHubNow() {
+  const data = cachedDb || readLocalDb();
+  return await pushToGitHub(data);
+}
+
 // Connect to MongoDB Atlas (if MONGODB_URI configured)
 export async function connectMongo() {
   if (!MONGODB_URI) return null;
@@ -240,7 +427,7 @@ export async function connectMongo() {
       console.log('✅ [MongoDB] เชื่อมต่อ MongoDB Atlas สำเร็จ! ฐานข้อมูลคลาวด์ถาวรพร้อมใช้งานตลอด 24 ชม.');
       return mongoCollection;
     } catch (err) {
-      console.warn('⚠️ [MongoDB] เชื่อมต่อ MongoDB ไม่สำเร็จ กำลังใช้ไฟล์บนเครื่องแทน:', err.message);
+      console.warn('⚠️ [MongoDB] เชื่อมต่อ MongoDB ไม่สำเร็จ:', err.message);
       isMongoConnected = false;
       mongoCollection = null;
       return null;
@@ -285,12 +472,20 @@ export function readDb() {
   return cachedDb;
 }
 
-// Save DB (Memory + Local File + Cloud MongoDB)
+// Save DB (Memory + Local File + Cloud GitHub / MongoDB)
 export function saveDb(data) {
   cachedDb = data;
   saveLocalDb(data);
 
-  // Sync to MongoDB Atlas asynchronously
+  // 1. Debounced async sync to GitHub (branch 'data')
+  if (GITHUB_TOKEN) {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      pushToGitHub(data);
+    }, 800);
+  }
+
+  // 2. Sync to MongoDB Atlas asynchronously (if configured)
   if (mongoCollection && isMongoConnected) {
     mongoCollection.replaceOne(
       { _id: 'main_store' },
@@ -300,7 +495,6 @@ export function saveDb(data) {
       console.error('⚠️ [MongoDB] Async save error:', err.message);
     });
   } else if (MONGODB_URI) {
-    // Try reconnecting in background and save
     connectMongo().then(col => {
       if (col) {
         col.replaceOne(
@@ -313,32 +507,45 @@ export function saveDb(data) {
   }
 }
 
-// Initialize database with QR codes & Cloud Sync
+// Initialize database with QR codes & Cloud Sync (GitHub primary, MongoDB fallback)
 export async function initDatabase() {
   // 1. Read local file as base
   let data = readLocalDb();
 
-  // 2. If MONGODB_URI is provided, sync from MongoDB Atlas
-  if (MONGODB_URI) {
+  // 2. If GITHUB_TOKEN is configured, sync latest from GitHub repository
+  if (GITHUB_TOKEN) {
+    try {
+      const remoteData = await fetchFromGitHub();
+      if (remoteData && Array.isArray(remoteData.items) && remoteData.items.length > 0) {
+        data = remoteData;
+        saveLocalDb(data);
+        console.log(`✅ [GitHub Cloud DB] ซิงค์และโหลดข้อมูลล่าสุด ${data.items.length} รายการจาก GitHub สำเร็จ!`);
+      } else {
+        // Push current seed to GitHub branch to initialize it
+        console.log(`[GitHub Cloud DB] ยังไม่มีข้อมูลบน branch "${GITHUB_BRANCH}" กำลังอัปโหลดข้อมูลเริ่มต้นขึ้น GitHub...`);
+        await pushToGitHub(data);
+      }
+    } catch (err) {
+      console.error('⚠️ [GitHub Cloud DB] ซิงค์เริ่มต้นไม่สำเร็จ:', err.message);
+    }
+  } else if (MONGODB_URI) {
+    // 3. If no GitHub token but MONGODB_URI is provided, sync with MongoDB Atlas
     try {
       const col = await connectMongo();
       if (col) {
         const doc = await col.findOne({ _id: 'main_store' });
         if (doc && Array.isArray(doc.items) && doc.items.length > 0) {
-          // Cloud MongoDB has data! Use it as source of truth
           const { _id, ...cleanData } = doc;
           data = cleanData;
           saveLocalDb(data);
           console.log(`✅ [MongoDB] โหลดข้อมูล ${data.items.length} รายการจาก MongoDB Atlas เรียบร้อย!`);
         } else {
-          // MongoDB is empty: seed it with local data
           console.log('[MongoDB] ฐานข้อมูลคลาวด์ยังว่างอยู่ กำลังอัปโหลดข้อมูลเริ่มต้นขึ้นคลาวด์...');
           await col.replaceOne(
             { _id: 'main_store' },
             { _id: 'main_store', ...data, updatedAt: new Date().toISOString() },
             { upsert: true }
           );
-          console.log(`✅ [MongoDB] บันทึกข้อมูลเริ่มต้น ${data.items.length} รายการขึ้น MongoDB Atlas สำเร็จ!`);
         }
       }
     } catch (err) {
@@ -375,11 +582,35 @@ export async function resetDatabase() {
 
 // Get DB status (for UI display and diagnostics)
 export function getDbStatus() {
+  const isCloud = isGitHubConnected || isMongoConnected;
+  let mode = 'local_file';
+  let provider = 'Local File';
+
+  if (isGitHubConnected) {
+    mode = 'github_cloud';
+    provider = 'GitHub';
+  } else if (isMongoConnected) {
+    mode = 'mongodb_atlas';
+    provider = 'MongoDB Atlas';
+  } else if (GITHUB_TOKEN) {
+    mode = 'connecting_github';
+    provider = 'GitHub';
+  } else if (MONGODB_URI) {
+    mode = 'connecting_mongodb';
+    provider = 'MongoDB Atlas';
+  }
+
   return {
-    isCloud: isMongoConnected,
-    mode: isMongoConnected ? 'mongodb_atlas' : (MONGODB_URI ? 'connecting_mongodb' : 'local_file'),
-    persistent: isMongoConnected,
+    isCloud,
+    mode,
+    provider,
+    persistent: isCloud,
     itemCount: cachedDb ? (cachedDb.items?.length || 0) : 0,
-    hasMongoUri: !!MONGODB_URI
+    hasGitHubToken: !!GITHUB_TOKEN,
+    hasMongoUri: !!MONGODB_URI,
+    gitHubRepo: GITHUB_REPO,
+    gitHubBranch: GITHUB_BRANCH,
+    gitHubLastSync,
+    gitHubSyncError
   };
 }

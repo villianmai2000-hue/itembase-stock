@@ -125,13 +125,13 @@ export default function Navbar({
                 }`}
                 title={
                   dbStatus?.isCloud 
-                    ? 'เชื่อมต่อฐานข้อมูลคลาวด์ถาวร (MongoDB Atlas) สำเร็จ ข้อมูลจะไม่มีวันสูญหาย' 
-                    : (isCloudHost ? 'เว็บไซต์ออนไลน์แล้ว แต่ยังใช้พื้นที่ชั่วคราว แนะนำเชื่อมต่อ MongoDB Atlas' : 'เชื่อมต่อเซิร์ฟเวอร์บนเครื่องนี้สำเร็จ')
+                    ? `เชื่อมต่อฐานข้อมูลคลาวด์ถาวร (${dbStatus?.provider || 'GitHub'}) สำเร็จ ข้อมูลจะไม่มีวันสูญหาย` 
+                    : (isCloudHost ? 'เว็บไซต์ออนไลน์แล้ว แต่ยังใช้พื้นที่ชั่วคราว แนะนำเชื่อมต่อ GitHub เพื่อบันทึกถาวร' : 'เชื่อมต่อเซิร์ฟเวอร์บนเครื่องนี้สำเร็จ')
                 }
               >
                 <span className={`w-2 h-2 rounded-full animate-pulse ${dbStatus?.isCloud ? 'bg-emerald-400' : (isCloudHost ? 'bg-amber-400' : 'bg-emerald-400')}`}></span>
                 <span>
-                  {dbStatus?.isCloud ? '🟢 คลาวด์ถาวร 24 ชม.' : (isCloudHost ? '🟡 ออนไลน์ (รอต่อคลาวด์ถาวร)' : '🟢 เชื่อมต่อเครื่องนี้')}
+                  {dbStatus?.isCloud ? `🟢 คลาวด์ถาวร (${dbStatus?.provider || 'GitHub'})` : (isCloudHost ? '🟡 ออนไลน์ (รอต่อคลาวด์ถาวร)' : '🟢 เชื่อมต่อเครื่องนี้')}
                 </span>
               </div>
             ) : (
