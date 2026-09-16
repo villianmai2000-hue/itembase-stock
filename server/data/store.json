@@ -59,6 +59,26 @@
   ],
   "items": [
     {
+      "id": "ITM-045",
+      "name": "ปามมาสติก อีซี่คลีน สำหรับทาภายใน CG101",
+      "category": "หมวดวัสดุเหลือใช้และเคมีภัณฑ์ (Leftover Materials & Chemicals)",
+      "quantity": 10,
+      "unit": "ชุด",
+      "minStock": 3,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "image": "/uploads/item-1789544701181-848905808.jpg",
+      "images": [
+        "/uploads/item-1789544701181-848905808.jpg",
+        "/uploads/item-1789544702029-815672250.jpg",
+        "/uploads/item-1789544702180-748010959.jpg"
+      ],
+      "note": "",
+      "qrCode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAARgAAAEYCAYAAACHjumMAAAAAklEQVR4AewaftIAAAW5SURBVO3BwW3YQJYFwOcPBcAjc2D+oXQOfewMvAZ82CuF2beSPFX16/cfASiYAJRMAEomACUTgJIJQMkEoGQCUDIBKJkAlEwASiYAJROAkglAyQSgZAJQMgEomQCUTABKJgAlE4CSCUDJBKDkI0XX/YTPO3vlret+0nL2ylvX/eSts1darvsJn3f2SsMEoGQCUDIBKJkAlEwASiYAJROAkglAyQSgZAJQ8pFv4uyVf9l1P2k4e+U7OHvlret+8tbZKy1nr/zLrvvJV5sAlEwASiYAJROAkglAyQSgZAJQMgEomQCUTABKPvIDXfeT7+Dsla923U9azl7hr+t+8h2cvfKTTABKJgAlE4CSCUDJBKBkAlAyASiZAJRMAEomACUf4Uc7e6Xlup+8dfbKW2ev8N9hAlAyASiZAJRMAEomACUTgJIJQMkEoGQCUDIBKJkAlHwE/g9c95OGs1f4uSYAJROAkglAyQSgZAJQMgEomQCUTABKJgAlE4CSj/xAZ6/w13U/aTl75a3rfvIvO3uFz5sAlEwASiYAJROAkglAyQSgZAJQMgEomQCUTABKPvJNXPcT+s5eeeu6n7x19spb1/3kO7juJ3RNAEomACUTgJIJQMkEoGQCUDIBKJkAlEwASiYAJb9+/xH4f3TdT946e4WfawJQMgEomQCUTABKJgAlE4CSCUDJBKBkAlAyASj5SNF1P3nr7JW3rvvJW2evfAfX/aTh7JWW637y1tkrb5298h1c95O3zl5puO4nn3H2ylvX/eSts1caJgAlE4CSCUDJBKBkAlAyASiZAJRMAEomACUTgJIJQMlH/nHX/aTl7JW3zl5puO4nLWevvHXdT946e+Wt637C/7ruJz/JBKBkAlAyASiZAJRMAEomACUTgJIJQMkEoGQCUPKRorNX3rruJ/+y637ScPbKZ1z3k6923U9azl5567qfvHXdT76Ds1feuu4nX20CUDIBKJkAlEwASiYAJROAkglAyQSgZAJQMgEo+UjRdT956+yVt677ScvZK29d95O3zl5567qf/MvOXnnrup98xnU/aTh75ac5e+WrTQBKJgAlE4CSCUDJBKBkAlAyASiZAJRMAEomACW/fv+Rkut+8tOcvdJw3U/gP3X2ylvX/eSts1caJgAlE4CSCUDJBKBkAlAyASiZAJRMAEomACUTgJJfv/8IP9Z1P/mMs1feuu4nb529wl/X/eSnOXulYQJQMgEomQCUTABKJgAlE4CSCUDJBKBkAlAyASiZAJR8pOi6n/B5Z6+0XPeTt85e+Wmu+8lbZ698tbNXPuO6n7x19spXmwCUTABKJgAlE4CSCUDJBKBkAlAyASiZAJRMAEo+8k2cvfIvu+4nDWevfMZ1P3nrup+8dfbKW9f95K2zVz7j7JWG637y1tkr38F1P3nr7JWGCUDJBKBkAlAyASiZAJRMAEomACUTgJIJQMkEoOQjP9B1P/kOzl75l5290nD2Sst1P3nr7JW3zl5567qf8NcEoGQCUDIBKJkAlEwASiYAJROAkglAyQSgZAJQ8hH+q5y98tZ1P2k4e+Wt637y05y9wl8TgJIJQMkEoGQCUDIBKJkAlEwASiYAJROAkglAyUf40a77yU9z3U9azl5567qfNJy98tZ1P/kOzl5pmACUTABKJgAlE4CSCUDJBKBkAlAyASiZAJRMAEomACUf+YHOXuGvs1c+47qffLWzV9667iefcd1PGs5eaTh7peW6n3y1CUDJBKBkAlAyASiZAJRMAEomACUTgJIJQMkEoOQj38R1P+HzrvvJZ5y98tZ1P2m47iffwdkrb133Ez5vAlAyASiZAJRMAEomACUTgJIJQMkEoGQCUDIBKPn1+48AFEwASiYAJROAkglAyQSgZAJQMgEomQCUTABKJgAlE4CSCUDJBKBkAlAyASiZAJRMAEomACUTgJIJQMkEoOR/ACi+BaXUO0cbAAAAAElFTkSuQmCC",
+      "updatedAt": "2026-09-16T07:45:02.381Z",
+      "updatedBy": "ยุทธการ คำกลอน"
+    },
+    {
       "id": "ITM-044",
       "name": "ซีเมนต์กันซึม 226 LANKO 226",
       "category": "หมวดวัสดุก่อสร้าง (Construction Materials)",
@@ -918,6 +938,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-702381",
+      "itemId": "ITM-045",
+      "itemName": "ปามมาสติก อีซี่คลีน สำหรับทาภายใน CG101",
+      "type": "add",
+      "changeQty": 10,
+      "balanceQty": 10,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "-",
+      "referenceType": "manual",
+      "referenceId": "-",
+      "user": "ยุทธการ คำกลอน",
+      "note": "ลงทะเบียนวัสดุอุปกรณ์ใหม่: ปามมาสติก อีซี่คลีน สำหรับทาภายใน CG101",
+      "timestamp": "2026-09-16T07:45:02.381Z"
+    },
     {
       "id": "LOG-932280",
       "itemId": "ITM-044",
