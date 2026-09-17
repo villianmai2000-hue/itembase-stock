@@ -26,7 +26,10 @@ import {
   CheckCircle2,
   Palette,
   Image as ImageIcon,
-  Camera
+  Camera,
+  Cloud,
+  ExternalLink,
+  Server
 } from 'lucide-react';
 import { compressImageFile } from '../utils/imageCompressor';
 
@@ -124,6 +127,92 @@ export default function SettingsPage({
   // GitHub sync state
   const [isSyncingGitHub, setIsSyncingGitHub] = useState(false);
   const [syncMessage, setSyncMessage] = useState(null);
+
+  // MongoDB Atlas (mongodb.com) state
+  const [mongoUriInput, setMongoUriInput] = useState('');
+  const [mongoDbNameInput, setMongoDbNameInput] = useState('itembase');
+  const [isConnectingMongo, setIsConnectingMongo] = useState(false);
+  const [mongoMessage, setMongoMessage] = useState(null);
+  const [localDbStatus, setLocalDbStatus] = useState(dbStatus || null);
+
+  useEffect(() => {
+    if (dbStatus) setLocalDbStatus(dbStatus);
+  }, [dbStatus]);
+
+  const refreshDbStatus = async () => {
+    try {
+      const res = await fetch('/api/db-status');
+      if (res.ok) {
+        const data = await res.json();
+        setLocalDbStatus(data);
+      }
+    } catch {}
+  };
+
+  const handleConnectMongo = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!mongoUriInput || !mongoUriInput.trim()) {
+      setMongoMessage({ type: 'error', text: 'กรุณากรอก MongoDB Connection String (เช่น mongodb+srv://...)' });
+      return;
+    }
+    setIsConnectingMongo(true);
+    setMongoMessage(null);
+    try {
+      const res = await fetch('/api/mongodb/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uri: mongoUriInput.trim(),
+          dbName: mongoDbNameInput.trim() || 'itembase'
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'เชื่อมต่อ MongoDB Atlas ไม่สำเร็จ');
+      }
+      setMongoMessage({ type: 'success', text: data.message || '✅ เชื่อมต่อ MongoDB Atlas สำเร็จ! ฐานข้อมูลออนไลน์ตลอด 24 ชม.' });
+      setMongoUriInput('');
+      if (data.dbStatus) setLocalDbStatus(data.dbStatus);
+      await refreshDbStatus();
+    } catch (err) {
+      setMongoMessage({ type: 'error', text: err.message });
+    } finally {
+      setIsConnectingMongo(false);
+    }
+  };
+
+  const handleMigrateMongo = async () => {
+    setIsConnectingMongo(true);
+    setMongoMessage(null);
+    try {
+      const res = await fetch('/api/mongodb/migrate', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'ย้ายข้อมูลไม่สำเร็จ');
+      setMongoMessage({ type: 'success', text: `✅ ${data.message}` });
+      await refreshDbStatus();
+    } catch (err) {
+      setMongoMessage({ type: 'error', text: err.message });
+    } finally {
+      setIsConnectingMongo(false);
+    }
+  };
+
+  const handleDisconnectMongo = async () => {
+    if (!confirm('ต้องการตัดการเชื่อมต่อ MongoDB Atlas ใช่หรือไม่? ระบบจะกลับไปใช้ฐานข้อมูลเดิม')) return;
+    setIsConnectingMongo(true);
+    setMongoMessage(null);
+    try {
+      const res = await fetch('/api/mongodb/disconnect', { method: 'POST' });
+      const data = await res.json();
+      setMongoMessage({ type: 'success', text: data.message || 'ตัดการเชื่อมต่อเรียบร้อยแล้ว' });
+      if (data.dbStatus) setLocalDbStatus(data.dbStatus);
+      await refreshDbStatus();
+    } catch (err) {
+      setMongoMessage({ type: 'error', text: err.message });
+    } finally {
+      setIsConnectingMongo(false);
+    }
+  };
 
   const handleManualSyncGitHub = async () => {
     setIsSyncingGitHub(true);
@@ -930,110 +1019,238 @@ export default function SettingsPage({
             </p>
           </div>
 
-          {/* Cloud Database Persistence Status (GitHub / MongoDB Atlas) */}
-          <div className={`p-4 rounded-xl border ${
-            dbStatus?.isCloud 
-              ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
-              : 'bg-amber-50 border-amber-300 text-amber-900'
-          } space-y-3`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
-                <span className="text-base">{dbStatus?.isCloud ? '🟢' : '⚠️'}</span>
-                <span>
-                  {dbStatus?.isCloud 
-                    ? `ฐานข้อมูลคลาวด์ถาวร: เชื่อมต่อ ${dbStatus?.provider || 'GitHub'} สำเร็จ 100%` 
-                    : 'สถานะฐานข้อมูล: จัดเก็บชั่วคราว (ยังไม่ได้เชื่อมต่อ GitHub เพื่อบันทึกถาวร)'}
-                </span>
+          {/* ========================================================= */}
+          {/* 1. MONGODB ATLAS (mongodb.com) CLOUD DATABASE (24/7 ONLINE) */}
+          {/* ========================================================= */}
+          <div className="p-5 rounded-2xl border border-slate-300 bg-gradient-to-br from-slate-900 to-slate-950 text-white shadow-lg space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-black text-lg">
+                  🍃
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>ฐานข้อมูลคลาวด์ MongoDB Atlas (mongodb.com)</span>
+                    {localDbStatus?.isMongoConnected && (
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                        ● ออนไลน์ 24 ชม.
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    เก็บบันทึกสต็อกสินค้า, ประวัติการเบิก-จ่าย, สมาชิก และรูปภาพถาวรบน mongodb.com ปลอดภัย 100%
+                  </p>
+                </div>
               </div>
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                dbStatus?.isCloud ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'
+
+              <span className={`text-xs px-3 py-1 rounded-full font-bold border self-start sm:self-center ${
+                localDbStatus?.isMongoConnected
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
               }`}>
-                {dbStatus?.isCloud ? `คลาวด์ถาวร (${dbStatus?.provider || 'GitHub'})` : 'โหมดชั่วคราว'}
+                {localDbStatus?.isMongoConnected ? '🟢 เชื่อมต่อคลาวด์สำเร็จ' : '⚪ ยังไม่ได้เชื่อมต่อ'}
               </span>
             </div>
 
-            {dbStatus?.isCloud ? (
-              <div className="space-y-2">
-                <p className="text-xs text-emerald-700 leading-relaxed">
-                  ข้อมูลสต็อก, การตรวจนับ, งานทีม และรูปภาพทั้งหมดถูกบันทึกอย่างปลอดภัยลงบน <strong>{dbStatus?.provider === 'GitHub' ? `GitHub (${dbStatus?.gitHubRepo || 'itembase-stock'} branch: ${dbStatus?.gitHubBranch || 'data'})` : 'MongoDB Atlas Cloud'}</strong> แบบถาวรเรียบร้อยแล้ว แม้เซิร์ฟเวอร์ Render.com จะปิด พักเครื่อง หรือรีสตาร์ต ข้อมูลก็จะยังคงอยู่อย่างสมบูรณ์ 100% ตลอดไป
-                </p>
-                {dbStatus?.gitHubLastSync && (
-                  <p className="text-[11px] text-emerald-600">
-                    🕒 ซิงค์กับ GitHub ล่าสุดเมื่อ: {new Date(dbStatus.gitHubLastSync).toLocaleString('th-TH')}
-                  </p>
-                )}
-                {dbStatus?.provider === 'GitHub' && (
-                  <div className="pt-1 flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={handleManualSyncGitHub}
-                      disabled={isSyncingGitHub}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow transition disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGitHub ? 'animate-spin' : ''}`} />
-                      <span>{isSyncingGitHub ? 'กำลังซิงค์...' : 'กดซิงค์กับ GitHub เดี๋ยวนี้'}</span>
-                    </button>
-                    {syncMessage && (
-                      <span className={`text-xs ${syncMessage.type === 'success' ? 'text-emerald-700 font-semibold' : 'text-red-600'}`}>
-                        {syncMessage.text}
-                      </span>
-                    )}
-                  </div>
-                )}
+            {/* Status Messages */}
+            {mongoMessage && (
+              <div className={`p-3 rounded-xl text-xs font-medium border flex items-center gap-2 animate-fadeIn ${
+                mongoMessage.type === 'success' 
+                  ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300' 
+                  : 'bg-red-950/80 border-red-500/40 text-red-300'
+              }`}>
+                {mongoMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />}
+                <span>{mongoMessage.text}</span>
               </div>
-            ) : (
-              <div className="text-xs text-amber-900 space-y-3 pt-1">
-                <p className="leading-relaxed">
-                  เนื่องจากเซิร์ฟเวอร์ Render.com จะล้างไฟล์ในเครื่องเมื่อระบบพักเครื่องหลังจากไม่มีคนเข้าใช้ 15 นาที เพื่อให้ข้อมูลที่อัปเดตออนไลน์ <strong>ไม่หายถาวร</strong> คุณสามารถใช้ <strong>GitHub เดิมของคุณเป็นฐานข้อมูลคลาวด์ถาวรได้ทันที (ไม่ต้องสมัครเว็บอื่นเพิ่ม!)</strong>:
-                </p>
+            )}
 
-                {/* Option 1: GitHub (Recommended) */}
-                <div className="bg-white/90 p-3.5 rounded-xl border border-amber-300 shadow-sm space-y-2.5 text-[12px]">
-                  <div className="flex items-center gap-2 font-bold text-slate-800 text-xs sm:text-sm">
-                    <span className="text-amber-600">🌟</span>
-                    <span>วิธีใช้ GitHub เดิมเป็นฐานข้อมูลคลาวด์ถาวร (ทำเพียง 1 นาที):</span>
+            {/* If Connected to MongoDB Atlas */}
+            {localDbStatus?.isMongoConnected ? (
+              <div className="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                  <div className="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/80">
+                    <span className="text-[10px] text-slate-400 block">ผู้ให้บริการ (Provider):</span>
+                    <span className="font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
+                      🍃 MongoDB Atlas (Cloud)
+                    </span>
                   </div>
-                  <ol className="list-decimal list-inside space-y-1.5 text-slate-700 leading-relaxed">
-                    <li>
-                      ไปที่ <a href="https://github.com/settings/tokens/new?scopes=repo&description=itembase-stock-cloud-db" target="_blank" rel="noreferrer" className="text-blue-600 font-semibold underline hover:text-blue-700">คลิกที่นี่เพื่อสร้าง GitHub Token (เปิดหน้าตั้งค่าทันที)</a>
-                    </li>
-                    <li>
-                      พิมพ์ชื่อ Note สั้นๆ เช่น <code>itembase-token</code> และเลือกติ๊กถูกที่ช่อง <strong>repo</strong> (เข้าถึงคลังโค้ดเพื่อบันทึกข้อมูล) จากนั้นเลื่อนลงล่างสุดแล้วกดปุ่มสีเขียว <strong>Generate token</strong>
-                    </li>
-                    <li>
-                      คัดลอกรหัสโทเค็นที่ได้ (จะขึ้นต้นด้วย <code>ghp_...</code>)
-                    </li>
-                    <li>
-                      เปิด <a href="https://dashboard.render.com" target="_blank" rel="noreferrer" className="text-blue-600 font-semibold underline hover:text-blue-700">dashboard.render.com</a> &gt; คลิกที่เว็บ <strong>itembase-stock</strong> &gt; เมนู <strong>Environment</strong>
-                    </li>
-                    <li>
-                      กด <strong>Add Environment Variable</strong> แล้วกรอก:
-                      <div className="mt-1 ml-4 p-2.5 bg-slate-100 rounded-lg border border-slate-300 font-mono text-[11px] text-slate-800">
-                        Key: <strong>GITHUB_TOKEN</strong><br/>
-                        Value: <em>วางรหัส ghp_... ที่คัดลอกมา</em>
-                      </div>
-                    </li>
-                    <li>
-                      กดปุ่ม <strong>Save Changes</strong> — เสร็จเรียบร้อย! ระบบจะเชื่อมต่อ GitHub เดิมของคุณและบันทึกข้อมูลลง GitHub อัตโนมัติตลอด 24 ชม.
-                    </li>
-                  </ol>
+                  <div className="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/80">
+                    <span className="text-[10px] text-slate-400 block">ชื่อฐานข้อมูล (Database):</span>
+                    <span className="font-mono font-bold text-white mt-0.5 block truncate">
+                      {localDbStatus?.mongoDbName || 'itembase'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/80">
+                    <span className="text-[10px] text-slate-400 block">สถานะการจัดเก็บ:</span>
+                    <span className="font-bold text-emerald-300 mt-0.5 block">
+                      ⚡ ซิงค์แบบ Real-time ตลอด 24 ชม.
+                    </span>
+                  </div>
                 </div>
 
-                {/* Option 2: MongoDB (Alternative) */}
-                <details className="text-[11px] text-slate-600 pt-1">
-                  <summary className="cursor-pointer font-semibold text-slate-700 hover:text-slate-900">
-                    หรือต้องการเชื่อมต่อด้วย MongoDB Atlas แทน? (คลิกเพื่อดูวิธี)
+                {localDbStatus?.mongoUriMasked && (
+                  <div className="text-[11px] text-slate-400 font-mono bg-black/40 p-2 rounded-lg border border-slate-800 truncate">
+                    <span className="text-slate-500">Connection: </span>{localDbStatus.mongoUriMasked}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800 flex-wrap gap-2">
+                  <span className="text-xs text-slate-300">
+                    ข้อมูลทั้งหมดถูกจัดเก็บบน mongodb.com อย่างถาวร แม้เซิร์ฟเวอร์จะปิดหรือรีสตาร์ต ข้อมูลจะไม่หาย 100%
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleMigrateMongo}
+                      disabled={isConnectingMongo}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow transition flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isConnectingMongo ? 'animate-spin' : ''}`} />
+                      <span>{isConnectingMongo ? 'กำลังอัปโหลด...' : 'อัปโหลด/ซิงค์ขึ้น MongoDB อีกครั้ง'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDisconnectMongo}
+                      disabled={isConnectingMongo}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium border border-slate-700 transition disabled:opacity-50"
+                    >
+                      ตัดการเชื่อมต่อ
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* If NOT Connected to MongoDB Atlas */
+              <div className="space-y-4">
+                <form onSubmit={handleConnectMongo} className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                      <span>กรอก MongoDB Connection String จาก mongodb.com:</span>
+                      <a 
+                        href="https://www.mongodb.com/cloud/atlas/register" 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="text-amber-400 hover:text-amber-300 text-[11px] flex items-center gap-1 underline"
+                      >
+                        <span>สมัคร mongodb.com ฟรี (คลิกที่นี่)</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </label>
+                    <input
+                      type="text"
+                      value={mongoUriInput}
+                      onChange={(e) => setMongoUriInput(e.target.value)}
+                      placeholder="mongodb+srv://<username>:<password>@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority"
+                      className="w-full text-xs bg-slate-800/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-emerald-300 font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none placeholder:text-slate-500"
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="w-full sm:w-64">
+                      <label className="block text-[11px] text-slate-400 mb-1">
+                        ชื่อฐานข้อมูล (Database Name):
+                      </label>
+                      <input
+                        type="text"
+                        value={mongoDbNameInput}
+                        onChange={(e) => setMongoDbNameInput(e.target.value)}
+                        placeholder="itembase"
+                        className="w-full text-xs bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isConnectingMongo}
+                      className="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2 disabled:opacity-50 self-end"
+                    >
+                      {isConnectingMongo ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          <span>กำลังทดสอบและเชื่อมต่อ...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>⚡</span>
+                          <span>บันทึกและเชื่อมต่อ MongoDB Atlas ทันที</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Step-by-step Guide to get MongoDB connection string */}
+                <details className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 text-xs text-slate-300">
+                  <summary className="cursor-pointer font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1.5 select-none">
+                    <span>📖 ดูวิธีรับรหัสเชื่อมต่อ (Connection String) จาก mongodb.com ฟรีใน 3 นาที</span>
                   </summary>
-                  <div className="bg-white/70 p-3 rounded-lg border border-slate-200 space-y-1 mt-2">
-                    <ol className="list-decimal list-inside space-y-1">
-                      <li>สมัครที่ <a href="https://www.mongodb.com/cloud/atlas/register" target="_blank" rel="noreferrer" className="text-blue-600 underline">mongodb.com/atlas</a> แล้วสร้าง Free M0 Cluster</li>
-                      <li>คัดลอก Connection String (<code>mongodb+srv://...</code>)</li>
-                      <li>ใส่ใน Render Dashboard เมนู Environment ตัวแปรชื่อ <code>MONGODB_URI</code></li>
+                  <div className="pt-3 space-y-2 text-[11px] text-slate-300 leading-relaxed border-t border-slate-800 mt-2">
+                    <ol className="list-decimal list-inside space-y-1.5 text-slate-300">
+                      <li>
+                        เข้าเว็บ <a href="https://www.mongodb.com/cloud/atlas/register" target="_blank" rel="noreferrer" className="text-emerald-400 underline font-semibold">mongodb.com/cloud/atlas/register</a> สมัครสมาชิกฟรี
+                      </li>
+                      <li>
+                        สร้างคลัสเตอร์ โดยเลือกตัวเลือก <strong>M0 (Free Forever)</strong> ไม่มีค่าใช้จ่ายตลอดชีพ
+                      </li>
+                      <li>
+                        ไปที่เมนูซ้าย <strong>Database Access</strong> &gt; กด <strong>Add New Database User</strong> &gt; กำหนด Username และ Password (จำรหัสผ่านไว้)
+                      </li>
+                      <li>
+                        ไปที่เมนูซ้าย <strong>Network Access</strong> &gt; กด <strong>Add IP Address</strong> &gt; เลือก <strong>Allow Access from Anywhere (0.0.0.0/0)</strong> เพื่อให้เซิร์ฟเวอร์ออนไลน์เข้าถึงได้
+                      </li>
+                      <li>
+                        ไปที่เมนู <strong>Database</strong> &gt; กดปุ่ม <strong>Connect</strong> &gt; เลือก <strong>Drivers (Node.js)</strong>
+                      </li>
+                      <li>
+                        คัดลอก Connection String ที่ได้ (เช่น <code>mongodb+srv://...</code>) แล้วเปลี่ยนคำว่า <code>&lt;password&gt;</code> เป็นรหัสผ่านของคุณ จากนั้นนำมาวางในช่องด้านบนแล้วกดปุ่มเชื่อมต่อได้เลย!
+                      </li>
                     </ol>
                   </div>
                 </details>
               </div>
             )}
           </div>
+
+          {/* ========================================================= */}
+          {/* 2. GITHUB CLOUD BACKUP (ALTERNATIVE OPTION) */}
+          {/* ========================================================= */}
+          <details className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
+            <summary className="cursor-pointer font-bold text-slate-700 hover:text-slate-900 flex items-center justify-between select-none">
+              <span className="flex items-center gap-2">
+                <span>🐙</span>
+                <span>หรือต้องการสำรองข้อมูลด้วย GitHub Cloud Database แทน?</span>
+              </span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                localDbStatus?.hasGitHubToken ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+              }`}>
+                {localDbStatus?.hasGitHubToken ? 'เชื่อมต่อ GitHub แล้ว' : 'ยังไม่ได้เชื่อมต่อ'}
+              </span>
+            </summary>
+
+            <div className="pt-2 text-slate-600 space-y-2">
+              <p>
+                คุณสามารถใช้ Repository GitHub เดิมของคุณ (<code>{localDbStatus?.gitHubRepo || 'villianmai2000-hue/itembase-stock'}</code> branch: <code>{localDbStatus?.gitHubBranch || 'data'}</code>) เป็นฐานข้อมูลสำรองได้
+              </p>
+              {localDbStatus?.hasGitHubToken && (
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleManualSyncGitHub}
+                    disabled={isSyncingGitHub}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold shadow transition disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGitHub ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingGitHub ? 'กำลังซิงค์...' : 'กดซิงค์กับ GitHub เดี๋ยวนี้'}</span>
+                  </button>
+                  {syncMessage && (
+                    <span className={`text-xs ${syncMessage.type === 'success' ? 'text-emerald-700 font-semibold' : 'text-red-600'}`}>
+                      {syncMessage.text}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </details>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Export */}

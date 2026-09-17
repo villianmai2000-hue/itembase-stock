@@ -5,7 +5,18 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { spawn } from 'child_process';
-import { readDb, saveDb, initDatabase, generateQRCode, resetDatabase, getDbStatus, syncGitHubNow } from './db.js';
+import { 
+  readDb, 
+  saveDb, 
+  initDatabase, 
+  generateQRCode, 
+  resetDatabase, 
+  getDbStatus, 
+  syncGitHubNow,
+  updateMongoConnection,
+  disconnectMongo,
+  migrateToMongo
+} from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,6 +51,56 @@ app.post('/api/github/sync', async (req, res) => {
     const result = await syncGitHubNow();
     res.json({
       ...result,
+      dbStatus: getDbStatus()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Connect and save MongoDB Atlas (mongodb.com) URI dynamically
+app.post('/api/mongodb/connect', async (req, res) => {
+  try {
+    const { uri, dbName } = req.body;
+    if (!uri || !uri.trim()) {
+      return res.status(400).json({ error: 'กรุณากรอก MongoDB Connection String (เช่น mongodb+srv://...)' });
+    }
+    const result = await updateMongoConnection(uri.trim(), dbName);
+    res.json({
+      success: true,
+      message: '✅ เชื่อมต่อ MongoDB Atlas สำเร็จ! ฐานข้อมูลคลาวด์ออนไลน์ตลอด 24 ชม.',
+      ...result,
+      dbStatus: getDbStatus()
+    });
+  } catch (err) {
+    console.error('[MongoDB Connect Error]:', err.message);
+    res.status(500).json({ 
+      error: `⚠️ เชื่อมต่อ MongoDB Atlas ไม่สำเร็จ: ${err.message}`,
+      hint: 'กรุณาตรวจสอบว่า: 1. รหัสผ่านถูกต้อง 2. ได้ตั้ง Network Access ใน mongodb.com เป็น 0.0.0.0/0 (Allow from Anywhere) หรือยัง'
+    });
+  }
+});
+
+// Force migrate/upload all local data to MongoDB Atlas
+app.post('/api/mongodb/migrate', async (req, res) => {
+  try {
+    const result = await migrateToMongo();
+    res.json({
+      ...result,
+      dbStatus: getDbStatus()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Disconnect from MongoDB Atlas
+app.post('/api/mongodb/disconnect', async (req, res) => {
+  try {
+    const result = await disconnectMongo();
+    res.json({
+      ...result,
+      message: 'ตัดการเชื่อมต่อ MongoDB Atlas เรียบร้อยแล้ว (กลับมาใช้ระบบเก็บข้อมูลเดิม)',
       dbStatus: getDbStatus()
     });
   } catch (err) {

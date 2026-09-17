@@ -18,7 +18,8 @@ let mongoCollection = null;
 let isMongoConnected = false;
 let mongoConnectingPromise = null;
 
-const MONGODB_URI = process.env.MONGODB_URI;
+let currentMongoUri = process.env.MONGODB_URI || '';
+export const getMongoUri = () => (process.env.MONGODB_URI || currentMongoUri || '').trim();
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN ? process.env.GITHUB_TOKEN.trim() : null;
 const GITHUB_REPO = process.env.GITHUB_REPO ? process.env.GITHUB_REPO.trim() : 'villianmai2000-hue/itembase-stock';
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH ? process.env.GITHUB_BRANCH.trim() : 'data';
@@ -402,16 +403,23 @@ export async function syncGitHubNow() {
   return await pushToGitHub(data);
 }
 
+// Helper to mask sensitive password in MongoDB URI for safe UI display
+export function maskMongoUri(uri) {
+  if (!uri) return '';
+  return uri.replace(/(mongodb(?:\+srv)?:\/\/[^:]+:)([^@]+)(@.+)/i, '$1****$3');
+}
+
 // Connect to MongoDB Atlas (if MONGODB_URI configured)
 export async function connectMongo() {
-  if (!MONGODB_URI) return null;
+  const uri = getMongoUri();
+  if (!uri) return null;
   if (mongoCollection && isMongoConnected) return mongoCollection;
   if (mongoConnectingPromise) return mongoConnectingPromise;
 
   mongoConnectingPromise = (async () => {
     try {
-      console.log('[MongoDB] กำลังเชื่อมต่อกับ MongoDB Atlas Cloud Database...');
-      mongoClient = new MongoClient(MONGODB_URI, {
+      console.log('[MongoDB] กำลังเชื่อมต่อกับ MongoDB Atlas Cloud Database:', maskMongoUri(uri));
+      mongoClient = new MongoClient(uri, {
         serverSelectionTimeoutMS: 5000,
         connectTimeoutMS: 10000
       });
@@ -482,7 +490,7 @@ export function saveDb(data) {
     ).catch(err => {
       console.error('⚠️ [MongoDB Atlas] Async save error:', err.message);
     });
-  } else if (MONGODB_URI) {
+  } else if (getMongoUri()) {
     connectMongo().then(col => {
       if (col) {
         col.replaceOne(
@@ -497,7 +505,7 @@ export function saveDb(data) {
   }
 
   // 2. Secondary/Fallback: Debounced async sync to GitHub (branch 'data') only when MongoDB is not active
-  if (!MONGODB_URI && GITHUB_TOKEN) {
+  if (!getMongoUri() && GITHUB_TOKEN) {
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       pushToGitHub(data);
@@ -511,7 +519,7 @@ export async function initDatabase() {
   let data = readLocalDb();
 
   // 2. If MONGODB_URI is configured, prioritize MongoDB Atlas Cloud Database
-  if (MONGODB_URI) {
+  if (getMongoUri()) {
     try {
       const col = await connectMongo();
       if (col) {
@@ -578,8 +586,127 @@ export async function resetDatabase() {
   return cloned;
 }
 
+// Connect to MongoDB Atlas with dynamic URI, test, and persist to .env
+export async function updateMongoConnection(newUri, dbName = 'itembase') {
+  if (!newUri || !newUri.trim()) {
+    throw new Error('กรุณาระบุ MongoDB Connection String (ขึ้นต้นด้วย mongodb+srv:// หรือ mongodb://)');
+  }
+  const cleanUri = newUri.trim();
+  const targetDb = (dbName || 'itembase').trim();
+
+  console.log('[MongoDB Atlas] กำลังทดสอบและเชื่อมต่อกับ:', maskMongoUri(cleanUri));
+  const testClient = new MongoClient(cleanUri, {
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 10000
+  });
+
+  await testClient.connect();
+  const db = testClient.db(targetDb);
+  const col = db.collection('store');
+
+  // Verify connection by reading document count
+  await col.estimatedDocumentCount();
+
+  // If old client exists, close it
+  if (mongoClient) {
+    try { await mongoClient.close(); } catch {}
+  }
+
+  mongoClient = testClient;
+  mongoCollection = col;
+  isMongoConnected = true;
+  currentMongoUri = cleanUri;
+  process.env.MONGODB_URI = cleanUri;
+  process.env.MONGODB_DB = targetDb;
+
+  // Persist to .env file in root project directory
+  try {
+    const envPath = path.join(__dirname, '..', '.env');
+    let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+    if (/^MONGODB_URI=/m.test(envContent)) {
+      envContent = envContent.replace(/^MONGODB_URI=.*/m, `MONGODB_URI="${cleanUri}"`);
+    } else {
+      envContent += `\nMONGODB_URI="${cleanUri}"\n`;
+    }
+    if (/^MONGODB_DB=/m.test(envContent)) {
+      envContent = envContent.replace(/^MONGODB_DB=.*/m, `MONGODB_DB="${targetDb}"`);
+    } else {
+      envContent += `MONGODB_DB="${targetDb}"\n`;
+    }
+    fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf-8');
+  } catch (err) {
+    console.warn('Could not write to .env:', err.message);
+  }
+
+  // Sync data: if MongoDB has existing data, load it; otherwise upload local seed
+  const currentData = cachedDb || readLocalDb();
+  const doc = await col.findOne({ _id: 'main_store' });
+  if (doc && Array.isArray(doc.items) && doc.items.length > 0) {
+    const { _id, ...cleanData } = doc;
+    cachedDb = cleanData;
+    saveLocalDb(cleanData);
+    console.log(`✅ [MongoDB Atlas] ซิงค์และโหลดข้อมูลล่าสุด ${cleanData.items.length} รายการจาก MongoDB Atlas สำเร็จ!`);
+  } else {
+    await col.replaceOne(
+      { _id: 'main_store' },
+      { _id: 'main_store', ...currentData, updatedAt: new Date().toISOString() },
+      { upsert: true }
+    );
+    console.log(`✅ [MongoDB Atlas] บันทึกข้อมูลเริ่มต้น ${currentData.items?.length || 0} รายการขึ้น MongoDB Atlas สำเร็จ!`);
+  }
+
+  return {
+    success: true,
+    dbName: targetDb,
+    itemCount: cachedDb.items?.length || 0,
+    maskedUri: maskMongoUri(cleanUri)
+  };
+}
+
+// Disconnect from MongoDB Atlas
+export async function disconnectMongo() {
+  if (mongoClient) {
+    try { await mongoClient.close(); } catch {}
+  }
+  mongoClient = null;
+  mongoCollection = null;
+  isMongoConnected = false;
+  currentMongoUri = '';
+  delete process.env.MONGODB_URI;
+
+  try {
+    const envPath = path.join(__dirname, '..', '.env');
+    if (fs.existsSync(envPath)) {
+      let envContent = fs.readFileSync(envPath, 'utf-8');
+      envContent = envContent.replace(/^MONGODB_URI=.*(\r?\n)?/m, '');
+      fs.writeFileSync(envPath, envContent, 'utf-8');
+    }
+  } catch {}
+
+  return { success: true };
+}
+
+// Force migrate/upload local database to MongoDB Atlas
+export async function migrateToMongo() {
+  if (!mongoCollection || !isMongoConnected) {
+    throw new Error('ยังไม่ได้เชื่อมต่อ MongoDB Atlas กรุณาเชื่อมต่อก่อน');
+  }
+  const currentData = cachedDb || readLocalDb();
+  await mongoCollection.replaceOne(
+    { _id: 'main_store' },
+    { _id: 'main_store', ...currentData, migratedAt: new Date().toISOString() },
+    { upsert: true }
+  );
+  return {
+    success: true,
+    message: `อัปโหลดข้อมูลทั้งหมด (${currentData.items?.length || 0} รายการ, ${currentData.tasks?.length || 0} งาน) ขึ้น MongoDB Atlas สำเร็จ!`,
+    itemCount: currentData.items?.length || 0
+  };
+}
+
 // Get DB status (for UI display and diagnostics)
 export function getDbStatus() {
+  const uri = getMongoUri();
   const isCloud = isMongoConnected || isGitHubConnected;
   let mode = 'local_file';
   let provider = 'Local File';
@@ -590,7 +717,7 @@ export function getDbStatus() {
   } else if (isGitHubConnected) {
     mode = 'github_cloud';
     provider = 'GitHub';
-  } else if (MONGODB_URI) {
+  } else if (uri) {
     mode = 'connecting_mongodb';
     provider = 'MongoDB Atlas';
   } else if (GITHUB_TOKEN) {
@@ -604,7 +731,10 @@ export function getDbStatus() {
     provider,
     persistent: isCloud,
     itemCount: cachedDb ? (cachedDb.items?.length || 0) : 0,
-    hasMongoUri: !!MONGODB_URI,
+    hasMongoUri: !!uri,
+    mongoUriMasked: maskMongoUri(uri),
+    mongoDbName: process.env.MONGODB_DB || 'itembase',
+    isMongoConnected,
     hasGitHubToken: !!GITHUB_TOKEN,
     gitHubRepo: GITHUB_REPO,
     gitHubBranch: GITHUB_BRANCH,
