@@ -140,6 +140,25 @@ const uploadAny    = upload.any();                      // accepts any file fiel
 
 
 
+// Helper to safely write base64 image strings to disk and return static URL (prevents database bloating)
+function saveBase64Image(dataUrl, prefix = 'upload') {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
+    return dataUrl;
+  }
+  try {
+    const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+    if (!matches) return dataUrl;
+    const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+    const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+    const filePath = path.join(UPLOAD_DIR, filename);
+    fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
+    return `/uploads/${filename}`;
+  } catch (err) {
+    console.error('Error saving base64 image:', err);
+    return dataUrl;
+  }
+}
+
 // Helper to get Thai formatted timestamp
 function getThaiTimestamp() {
   const now = new Date();
@@ -660,6 +679,18 @@ app.post('/api/tasks', (req, res) => {
     returnedAt: null
   }));
 
+  const processAttachments = (atts, taskIdentifier) => {
+    if (!Array.isArray(atts)) return [];
+    return atts.map((a, i) => {
+      if (!a) return a;
+      const url = a.url || a.data;
+      return {
+        ...a,
+        url: saveBase64Image(url, `task-${String(taskIdentifier).toLowerCase()}-att-${i + 1}`)
+      };
+    });
+  };
+
   const newTask = {
     id,
     title,
@@ -671,7 +702,7 @@ app.post('/api/tasks', (req, res) => {
     createdAt: getThaiTimestamp(),
     createdBy: user || 'ยุทธการ คำกลอน',
     materials: formattedMaterials,
-    attachments: Array.isArray(attachments) ? attachments : []
+    attachments: processAttachments(attachments, id)
   };
 
   db.tasks.unshift(newTask);
@@ -700,6 +731,18 @@ app.put('/api/tasks/:id', (req, res) => {
     }
   }
 
+  const processAttachments = (atts, taskIdentifier) => {
+    if (!Array.isArray(atts)) return [];
+    return atts.map((a, i) => {
+      if (!a) return a;
+      const url = a.url || a.data;
+      return {
+        ...a,
+        url: saveBase64Image(url, `task-${String(taskIdentifier).toLowerCase()}-att-${i + 1}`)
+      };
+    });
+  };
+
   const current = db.tasks[index];
   db.tasks[index] = {
     ...current,
@@ -710,7 +753,7 @@ app.put('/api/tasks/:id', (req, res) => {
     assignee: matchedAssignee ? matchedAssignee.name : (assignee !== undefined ? assignee : current.assignee),
     dueDate: dueDate !== undefined ? dueDate : current.dueDate,
     materials: materials !== undefined ? materials : current.materials,
-    attachments: attachments !== undefined ? (Array.isArray(attachments) ? attachments : []) : (current.attachments || [])
+    attachments: attachments !== undefined ? processAttachments(attachments, taskId) : (current.attachments || [])
   };
 
   saveDb(db);
@@ -1780,19 +1823,7 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
 
   const files = {};
   (req.files || []).forEach(f => {
-    const filePath = path.join(UPLOAD_DIR, f.filename);
-    if (fs.existsSync(filePath)) {
-      try {
-        const b64 = fs.readFileSync(filePath).toString('base64');
-        const ext = path.extname(f.filename).replace('.', '').toLowerCase() || 'jpeg';
-        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-        files[f.fieldname] = `data:${mime};base64,${b64}`;
-      } catch (e) {
-        files[f.fieldname] = `/uploads/${f.filename}`;
-      }
-    } else {
-      files[f.fieldname] = `/uploads/${f.filename}`;
-    }
+    files[f.fieldname] = `/uploads/${f.filename}`;
   });
 
   db.branding = db.branding || {};
@@ -1800,10 +1831,18 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
   if (bannerHeight !== undefined) db.branding.bannerHeight = bannerHeight;
   if (bannerFit !== undefined) db.branding.bannerFit = bannerFit;
   if (bannerPosition !== undefined) db.branding.bannerPosition = bannerPosition;
-  if (files.profileImage) db.branding.profileImage = files.profileImage;
-  else if (profileImageUrl !== undefined) db.branding.profileImage = profileImageUrl;
-  if (files.coverImage) db.branding.coverImage = files.coverImage;
-  else if (coverImageUrl !== undefined) db.branding.coverImage = coverImageUrl;
+  
+  if (files.profileImage) {
+    db.branding.profileImage = files.profileImage;
+  } else if (profileImageUrl !== undefined) {
+    db.branding.profileImage = profileImageUrl ? saveBase64Image(profileImageUrl, 'branding-profile') : '';
+  }
+  
+  if (files.coverImage) {
+    db.branding.coverImage = files.coverImage;
+  } else if (coverImageUrl !== undefined) {
+    db.branding.coverImage = coverImageUrl ? saveBase64Image(coverImageUrl, 'branding-cover') : '';
+  }
 
   // Update Super Admin account binding (Phone, Email, PIN, Password)
   let adminIndex = (db.team_members || []).findIndex(

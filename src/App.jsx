@@ -529,7 +529,7 @@ export default function App() {
     const count = Number(actualQuantity);
     const newLocation = (location && location.trim()) || '';
 
-    // 1. Optimistically update local React state immediately so count changes on screen without waiting
+    // 1. Optimistically update local React state immediately (0 ms delay)
     setItems(prev => prev.map(item => {
       if (item.id.toLowerCase() === itemId.toLowerCase()) {
         return {
@@ -553,11 +553,13 @@ export default function App() {
       if (!res.ok) {
         throw new Error(result.error || 'ตรวจนับสต็อกไม่สำเร็จ');
       }
-      showToast(`ตรวจนับสต็อกสำเร็จ! อัปเดตยอดคงเหลือเป็น ${count} เรียบร้อยแล้ว`);
+      showToast(`✅ ตรวจนับสต็อกสำเร็จ! อัปเดตยอดคงเหลือเป็น ${count} เรียบร้อยแล้ว`);
       if (result.item) {
         setItems(prev => prev.map(item => item.id.toLowerCase() === itemId.toLowerCase() ? result.item : item));
       }
-      await loadData();
+      // Non-blocking background sync
+      loadData();
+      return result;
     } catch (err) {
       console.error('handleUpdateAudit error:', err);
       showToast(err.message, 'error');
@@ -569,6 +571,25 @@ export default function App() {
   };
 
   const handleTransaction = async (itemId, type, amount, targetLocation, note, gps) => {
+    const qty = Number(amount) || 0;
+
+    // 1. Optimistically update local React state immediately (0 ms delay)
+    setItems(prev => prev.map(item => {
+      if (item.id.toLowerCase() === itemId.toLowerCase()) {
+        let newQty = item.quantity;
+        if (type === 'in') newQty += qty;
+        else if (type === 'out') newQty = Math.max(0, newQty - qty);
+        return {
+          ...item,
+          quantity: newQty,
+          location: (type === 'move' && targetLocation) ? targetLocation.trim() : item.location,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser || item.updatedBy
+        };
+      }
+      return item;
+    }));
+
     try {
       const res = await fetch(`/api/items/${itemId}/transaction`, {
         method: 'POST',
@@ -579,14 +600,18 @@ export default function App() {
       if (!res.ok) {
         throw new Error(result.error || 'ทำรายการไม่สำเร็จ');
       }
-      showToast(`บันทึกรายการสำเร็จ!`);
+      const actionThai = type === 'in' ? 'รับของเข้าสต็อก' : type === 'out' ? 'เบิกของออก' : 'ย้ายสถานที่';
+      showToast(`✅ บันทึก${actionThai}สำเร็จ!`);
       if (result && result.item) {
         setItems(prev => prev.map(i => i.id.toLowerCase() === itemId.toLowerCase() ? result.item : i));
       }
-      await loadData();
+      // Non-blocking background sync
+      loadData();
+      return result;
     } catch (err) {
       console.error('handleTransaction error:', err);
       showToast(err.message, 'error');
+      await loadData();
       alert(`⚠️ ทำรายการไม่สำเร็จ: ${err.message}`);
       throw err;
     }
@@ -823,13 +848,14 @@ export default function App() {
       }
       if (!res.ok) throw new Error(result.error || 'บันทึกการตั้งค่าเว็บไซต์ไม่สำเร็จ');
       if (result.branding) {
-        setBranding(result.branding);
+        setBranding(prev => ({ ...prev, ...result.branding }));
+        try { localStorage.setItem('itembase_branding_cache', JSON.stringify(result.branding)); } catch (e) {}
         if (result.branding.siteTitle) {
           document.title = `${result.branding.siteTitle} - ระบบคลังและจัดการงาน`;
         }
       }
-      showToast(result.message || 'บันทึกการตั้งค่าเว็บไซต์และผูกบัญชีเรียบร้อย');
-      await loadData(currentUser);
+      showToast(result.message || 'บันทึกการตั้งค่าหน้าปกและระบบเรียบร้อย');
+      loadData(currentUser);
       return result;
     } catch (err) {
       showToast(err.message, 'error');

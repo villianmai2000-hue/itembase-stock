@@ -22,7 +22,11 @@ import {
   Maximize2,
   Eye,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Upload,
+  X,
+  Loader2,
+  ImageIcon
 } from 'lucide-react';
 import { PRIORITY_MAP, STATUS_MAP, formatThaiDate } from '../utils/format';
 import { ImageLightboxModal, PdfViewerModal } from './FilePreviewModal';
@@ -55,6 +59,8 @@ export default function TaskBoard({
   );
   const [showHeightSettings, setShowHeightSettings] = useState(false);
   const [isSavingHeight, setIsSavingHeight] = useState(false);
+  const [newCoverFile, setNewCoverFile] = useState(null);
+  const [newCoverPreview, setNewCoverPreview] = useState('');
 
   useEffect(() => {
     if (branding?.bannerHeight) {
@@ -183,182 +189,20 @@ export default function TaskBoard({
 
               <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
                 {isAdmin && (
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowHeightSettings(prev => !prev)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/60 hover:bg-black/80 text-white text-xs font-semibold backdrop-blur-md border border-white/30 shadow-lg transition"
-                      title="ปรับลดหรือขยายขนาดรูปหน้าปก และจัดตำแหน่งภาพ (เฉพาะผู้ควบคุมระบบสูงสุด)"
-                    >
-                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="hidden sm:inline">ปรับแต่งหน้าปก</span>
-                      <span className="text-[11px] text-amber-300 font-mono">({bannerHeight}px)</span>
-                    </button>
-
-                    {showHeightSettings && (
-                      <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-slate-900/98 backdrop-blur-2xl border border-slate-700/90 rounded-2xl shadow-2xl p-4 z-40 text-white animate-fadeIn space-y-3.5">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                            <Sliders className="w-4 h-4" />
-                            <span>ปรับแต่งขนาดและจัดตำแหน่งรูปหน้าปก</span>
-                          </div>
-                          <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 font-medium">
-                            👑 Super Admin
-                          </span>
-                        </div>
-
-                        {/* 1. Fit Mode Toggle (Cover vs Contain) */}
-                        <div>
-                          <div className="text-[11px] text-slate-300 font-medium mb-1.5">รูปแบบการแสดงภาพ:</div>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setBannerFit('cover')}
-                              className={`px-2.5 py-1.5 text-xs rounded-xl border font-medium transition ${
-                                bannerFit === 'cover'
-                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow'
-                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                              }`}
-                            >
-                              🖼️ เต็มกรอบ (Cover)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setBannerFit('contain')}
-                              className={`px-2.5 py-1.5 text-xs rounded-xl border font-medium transition ${
-                                bannerFit === 'contain'
-                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow'
-                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                              }`}
-                            >
-                              🔍 เห็นภาพเต็มใบ (Contain)
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* 2. Vertical Position Slider (ดึงภาพลงมา / เลื่อนขึ้น-ลง) */}
-                        <div>
-                          <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
-                            <span>ดึงภาพขึ้น-ลง (ตำแหน่งภาพ):</span>
-                            <span className="font-mono font-bold text-amber-400">{bannerPosition}%</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="2"
-                            value={bannerPosition}
-                            onChange={(e) => setBannerPosition(Number(e.target.value))}
-                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                          />
-                          <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
-                            <span>0% (บนสุด)</span>
-                            <span className="text-amber-300/80">เลื่อนดึงภาพลงมา</span>
-                            <span>100% (ล่างสุด)</span>
-                          </div>
-                        </div>
-
-                        {/* 3. Quick Height Presets */}
-                        <div>
-                          <div className="text-[11px] text-slate-300 font-medium mb-1.5">ขนาดความสูงมาตรฐาน:</div>
-                          <div className="grid grid-cols-3 gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setBannerHeight(130)}
-                              className={`px-2 py-1.5 text-xs rounded-lg border font-medium transition ${
-                                bannerHeight === 130 
-                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
-                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                              }`}
-                            >
-                              กะทัดรัด (130)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setBannerHeight(180)}
-                              className={`px-2 py-1.5 text-xs rounded-lg border font-medium transition ${
-                                bannerHeight === 180 
-                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
-                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                              }`}
-                            >
-                              มาตรฐาน (180)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setBannerHeight(280)}
-                              className={`px-2 py-1.5 text-xs rounded-lg border font-medium transition ${
-                                bannerHeight === 280 
-                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
-                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                              }`}
-                            >
-                              ขยายใหญ่ (280)
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* 4. Fine Height Slider */}
-                        <div>
-                          <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
-                            <span>เลื่อนปรับความสูงละเอียด:</span>
-                            <span className="font-mono font-bold text-amber-400">{bannerHeight} px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="120"
-                            max="450"
-                            step="5"
-                            value={bannerHeight}
-                            onChange={(e) => setBannerHeight(Number(e.target.value))}
-                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                          />
-                          <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
-                            <span>120px (เตี้ย)</span>
-                            <span>450px (กว้างเต็มตา)</span>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBannerHeight(parsedBannerHeight);
-                              setBannerFit(branding?.bannerFit || 'cover');
-                              setBannerPosition(branding?.bannerPosition !== undefined ? parseInt(branding.bannerPosition) : 50);
-                              setShowHeightSettings(false);
-                            }}
-                            className="px-3 py-1.5 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-                          >
-                            ยกเลิก
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isSavingHeight}
-                            onClick={async () => {
-                              setIsSavingHeight(true);
-                              try {
-                                if (onSaveBranding) {
-                                  await onSaveBranding({ 
-                                    bannerHeight: `${bannerHeight}px`,
-                                    bannerFit,
-                                    bannerPosition: `${bannerPosition}%`
-                                  });
-                                }
-                                setShowHeightSettings(false);
-                              } finally {
-                                setIsSavingHeight(false);
-                              }
-                            }}
-                            className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md transition disabled:opacity-50"
-                          >
-                            {isSavingHeight ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่าหน้าปก'}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewCoverFile(null);
+                      setNewCoverPreview(branding?.coverImage || '');
+                      setShowHeightSettings(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/60 hover:bg-black/80 text-white text-xs font-semibold backdrop-blur-md border border-white/30 shadow-lg transition active:scale-95"
+                    title="ปรับแต่งรูปหน้าปก ยืดหด จัดตำแหน่ง หรือเปลี่ยนรูป (เฉพาะผู้ควบคุมระบบ)"
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                    <span>ปรับแต่งหน้าปก</span>
+                    <span className="text-[11px] text-amber-300 font-mono">({bannerHeight}px)</span>
+                  </button>
                 )}
 
                 <button
@@ -399,6 +243,21 @@ export default function TaskBoard({
             </div>
 
             <div className="flex items-center gap-2">
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewCoverFile(null);
+                    setNewCoverPreview(branding?.coverImage || '');
+                    setShowHeightSettings(true);
+                  }}
+                  className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs sm:text-sm font-semibold px-3.5 py-2.5 rounded-xl border border-slate-700 shadow transition active:scale-95"
+                  title="เพิ่มหรือปรับแต่งรูปหน้าปก"
+                >
+                  <Sliders className="w-4 h-4 text-amber-400" />
+                  <span>เพิ่ม/ตั้งค่าหน้าปก</span>
+                </button>
+              )}
               <button
                 onClick={onOpenNewTaskModal}
                 className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-orange-600/20 transition transform active:scale-95"
@@ -839,6 +698,260 @@ export default function TaskBoard({
                   ยืนยันส่งคืนและรวมสต็อก
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Banner Adjustment Modal (Full Screen Overlay - Immune to overflow-hidden) */}
+      {showHeightSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-5 text-white space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-sm font-bold text-amber-400">
+                <Sliders className="w-5 h-5" />
+                <span>ปรับแต่งขนาด จัดตำแหน่ง และเปลี่ยนรูปหน้าปก</span>
+              </div>
+              <button
+                onClick={() => setShowHeightSettings(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Live Interactive Preview Box */}
+            <div>
+              <div className="text-[11px] text-slate-400 mb-1.5 flex items-center justify-between">
+                <span>ตัวอย่างการแสดงผลจริง (Live Preview):</span>
+                <span className="text-amber-400 font-mono text-xs">{bannerHeight}px • {bannerPosition}% • {bannerFit}</span>
+              </div>
+              <div 
+                className="w-full bg-slate-950 rounded-xl overflow-hidden border border-slate-700 relative shadow-inner flex items-end transition-all"
+                style={{ height: `${Math.min(220, Math.max(110, Math.round(bannerHeight * 0.6)))}px` }}
+              >
+                {newCoverPreview || branding?.coverImage ? (
+                  <img
+                    src={newCoverPreview || branding.coverImage}
+                    alt="Preview"
+                    className={`absolute inset-0 w-full h-full transition-all ${
+                      bannerFit === 'contain' ? 'object-contain' : 'object-cover'
+                    }`}
+                    style={{ objectPosition: `50% ${bannerPosition}%` }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 text-xs">
+                    <ImageIcon className="w-6 h-6 mb-1 text-slate-600" />
+                    <span>ยังไม่มีรูปภาพหน้าปก</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none"></div>
+                <div className="relative z-10 p-3 flex items-center gap-2 text-xs">
+                  <div className="w-8 h-8 rounded-lg bg-orange-600 border border-white/80 flex items-center justify-center text-white shrink-0">
+                    <HardHat className="w-4 h-4" />
+                  </div>
+                  <span className="font-bold text-white shadow-sm drop-shadow">กระดานภาพรวมงานทีม (ตัวอย่างมุมมอง)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 1. Change / Upload Cover Image */}
+            <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700/80 space-y-2">
+              <div className="text-xs font-semibold text-slate-200 flex items-center justify-between">
+                <span>รูปภาพหน้าปก (Cover Image):</span>
+                {(newCoverPreview || branding?.coverImage) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewCoverFile(null);
+                      setNewCoverPreview('');
+                    }}
+                    className="text-[11px] text-red-400 hover:text-red-300 hover:underline"
+                  >
+                    🗑️ ลบรูปหน้าปก
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold shadow transition active:scale-95">
+                  <Upload className="w-4 h-4" />
+                  <span>{newCoverPreview || branding?.coverImage ? 'เปลี่ยนรูปหน้าปกใหม่' : 'เลือกรูปภาพหน้าปก'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setNewCoverFile(file);
+                        setNewCoverPreview(URL.createObjectURL(file));
+                      }
+                    }}
+                  />
+                </label>
+                <span className="text-[11px] text-slate-400 truncate">
+                  {newCoverFile ? newCoverFile.name : (branding?.coverImage ? 'มีรูปหน้าปกแล้ว' : 'ยังไม่ได้ตั้งค่ารูปภาพ')}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. Fit Mode Toggle */}
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-slate-300">รูปแบบการแสดงภาพ:</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBannerFit('cover')}
+                  className={`px-3 py-2 text-xs rounded-xl border font-semibold transition ${
+                    bannerFit === 'cover'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  🖼️ เต็มกรอบ (Cover)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBannerFit('contain')}
+                  className={`px-3 py-2 text-xs rounded-xl border font-semibold transition ${
+                    bannerFit === 'contain'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  🔍 เห็นภาพเต็มใบ (Contain)
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Vertical Position Slider (ดึงภาพลงมา) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-slate-300">
+                <span className="font-medium">ดึงภาพขึ้น-ลง (ตำแหน่งภาพแนวตั้ง):</span>
+                <span className="font-mono font-bold text-amber-400 text-sm">{bannerPosition}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="2"
+                value={bannerPosition}
+                onChange={(e) => setBannerPosition(Number(e.target.value))}
+                className="w-full h-2.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400">
+                <span>0% (ขอบบน)</span>
+                <span className="text-amber-300 font-semibold">👉 เลื่อนไปทางขวาเพื่อดึงภาพลงมา</span>
+                <span>100% (ขอบล่าง)</span>
+              </div>
+            </div>
+
+            {/* 4. Height Adjustment */}
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-slate-300">ความสูงของหน้าปก (Banner Height):</div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBannerHeight(130)}
+                  className={`px-2.5 py-1.5 text-xs rounded-lg border font-medium transition ${
+                    bannerHeight === 130 
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  กะทัดรัด (130px)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBannerHeight(180)}
+                  className={`px-2.5 py-1.5 text-xs rounded-lg border font-medium transition ${
+                    bannerHeight === 180 
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  มาตรฐาน (180px)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBannerHeight(280)}
+                  className={`px-2.5 py-1.5 text-xs rounded-lg border font-medium transition ${
+                    bannerHeight === 280 
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  ขยายใหญ่ (280px)
+                </button>
+              </div>
+
+              <div className="pt-1">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span>ปรับระดับละเอียด:</span>
+                  <span className="font-mono text-amber-400 font-bold">{bannerHeight} px</span>
+                </div>
+                <input
+                  type="range"
+                  min="120"
+                  max="450"
+                  step="5"
+                  value={bannerHeight}
+                  onChange={(e) => setBannerHeight(Number(e.target.value))}
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setBannerHeight(parsedBannerHeight);
+                  setBannerFit(branding?.bannerFit || 'cover');
+                  setBannerPosition(branding?.bannerPosition !== undefined ? parseInt(branding.bannerPosition) : 50);
+                  setNewCoverFile(null);
+                  setNewCoverPreview('');
+                  setShowHeightSettings(false);
+                }}
+                className="px-4 py-2 text-xs rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={isSavingHeight}
+                onClick={async () => {
+                  setIsSavingHeight(true);
+                  try {
+                    if (onSaveBranding) {
+                      await onSaveBranding({ 
+                        bannerHeight: `${bannerHeight}px`,
+                        bannerFit,
+                        bannerPosition: `${bannerPosition}%`,
+                        coverImageFile: newCoverFile || undefined,
+                        coverImageUrl: newCoverPreview === '' ? '' : (newCoverFile ? undefined : branding?.coverImage)
+                      });
+                    }
+                    setShowHeightSettings(false);
+                  } finally {
+                    setIsSavingHeight(false);
+                  }
+                }}
+                className="px-5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 transition flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isSavingHeight ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>กำลังบันทึก...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>บันทึกการตั้งค่าหน้าปก</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
