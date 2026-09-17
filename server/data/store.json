@@ -38,19 +38,19 @@
     },
     {
       "id": "TM-06",
-      "name": "คุณอำภาพร  สำลีม่วง",
-      "role": "งานสโตร์",
+      "name": "DVP",
+      "role": "ช่างหน้างาน",
       "phone": "-",
       "isAdmin": false,
       "status": "active",
-      "password": "1234"
+      "password": "1973"
     },
     {
       "id": "TM-06",
       "name": "DVP",
       "role": "ช่างหน้างาน",
       "phone": "-",
-      "password": "1837290852",
+      "password": "1973",
       "isAdmin": false,
       "status": "active"
     }
