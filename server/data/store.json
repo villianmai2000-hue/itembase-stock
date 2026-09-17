@@ -55,6 +55,24 @@
   ],
   "items": [
     {
+      "id": "ITM-051",
+      "name": "เครื่องเป่าลมร้อน",
+      "category": "หมวดเครื่องมือไฟฟ้าและอุปกรณ์มูลค่าสูง (High-Value Power Tools)",
+      "quantity": 2,
+      "unit": "ตัว",
+      "minStock": 1,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "image": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&auto=format&fit=crop&q=60",
+      "images": [
+        "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&auto=format&fit=crop&q=60"
+      ],
+      "note": "",
+      "qrCode": "data:image/png;base64,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",
+      "updatedAt": "2026-09-17T08:30:16.289Z",
+      "updatedBy": "ยุทธการ คำกลอน"
+    },
+    {
       "id": "ITM-050",
       "name": "น้ำยาประสานคอนกรีต LANKO 751",
       "category": "หมวดวัสดุเหลือใช้และเคมีภัณฑ์ (Leftover Materials & Chemicals)",
@@ -1032,6 +1050,22 @@
     }
   ],
   "inventory_logs": [
+    {
+      "id": "LOG-816289",
+      "itemId": "ITM-051",
+      "itemName": "เครื่องเป่าลมร้อน",
+      "type": "add",
+      "changeQty": 2,
+      "balanceQty": 2,
+      "location": "ไซต์งาน กกต.นนทบุรี [GPS: 13.877612, 100.403761]",
+      "gps": null,
+      "previousLocation": "-",
+      "referenceType": "manual",
+      "referenceId": "-",
+      "user": "ยุทธการ คำกลอน",
+      "note": "ลงทะเบียนวัสดุอุปกรณ์ใหม่: เครื่องเป่าลมร้อน",
+      "timestamp": "2026-09-17T08:30:16.289Z"
+    },
     {
       "id": "LOG-789732",
       "itemId": "ITM-034",
