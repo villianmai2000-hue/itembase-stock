@@ -468,27 +468,19 @@ export function readDb() {
   return cachedDb;
 }
 
-// Save DB (Memory + Local File + Cloud GitHub / MongoDB)
+// Save DB (Memory + Local File + Cloud MongoDB Atlas / GitHub)
 export function saveDb(data) {
   cachedDb = data;
   saveLocalDb(data);
 
-  // 1. Debounced async sync to GitHub (branch 'data')
-  if (GITHUB_TOKEN) {
-    if (syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(() => {
-      pushToGitHub(data);
-    }, 800);
-  }
-
-  // 2. Sync to MongoDB Atlas asynchronously (if configured)
+  // 1. Primary: Save to MongoDB Atlas (Instant, high-performance real-time cloud database)
   if (mongoCollection && isMongoConnected) {
     mongoCollection.replaceOne(
       { _id: 'main_store' },
       { _id: 'main_store', ...data, savedAt: new Date().toISOString() },
       { upsert: true }
     ).catch(err => {
-      console.error('⚠️ [MongoDB] Async save error:', err.message);
+      console.error('⚠️ [MongoDB Atlas] Async save error:', err.message);
     });
   } else if (MONGODB_URI) {
     connectMongo().then(col => {
@@ -497,35 +489,29 @@ export function saveDb(data) {
           { _id: 'main_store' },
           { _id: 'main_store', ...data, savedAt: new Date().toISOString() },
           { upsert: true }
-        ).catch(() => {});
+        ).catch(err => {
+          console.error('⚠️ [MongoDB Atlas] Async save error:', err.message);
+        });
       }
     });
   }
+
+  // 2. Secondary/Fallback: Debounced async sync to GitHub (branch 'data') only when MongoDB is not active
+  if (!MONGODB_URI && GITHUB_TOKEN) {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      pushToGitHub(data);
+    }, 1500);
+  }
 }
 
-// Initialize database with QR codes & Cloud Sync (GitHub primary, MongoDB fallback)
+// Initialize database with QR codes & Cloud Sync (MongoDB Atlas primary, GitHub fallback)
 export async function initDatabase() {
   // 1. Read local file as base
   let data = readLocalDb();
 
-  // 2. If GITHUB_TOKEN is configured, sync latest from GitHub repository
-  if (GITHUB_TOKEN) {
-    try {
-      const remoteData = await fetchFromGitHub();
-      if (remoteData && Array.isArray(remoteData.items) && remoteData.items.length > 0) {
-        data = remoteData;
-        saveLocalDb(data);
-        console.log(`✅ [GitHub Cloud DB] ซิงค์และโหลดข้อมูลล่าสุด ${data.items.length} รายการจาก GitHub สำเร็จ!`);
-      } else {
-        // Push current seed to GitHub branch to initialize it
-        console.log(`[GitHub Cloud DB] ยังไม่มีข้อมูลบน branch "${GITHUB_BRANCH}" กำลังอัปโหลดข้อมูลเริ่มต้นขึ้น GitHub...`);
-        await pushToGitHub(data);
-      }
-    } catch (err) {
-      console.error('⚠️ [GitHub Cloud DB] ซิงค์เริ่มต้นไม่สำเร็จ:', err.message);
-    }
-  } else if (MONGODB_URI) {
-    // 3. If no GitHub token but MONGODB_URI is provided, sync with MongoDB Atlas
+  // 2. If MONGODB_URI is configured, prioritize MongoDB Atlas Cloud Database
+  if (MONGODB_URI) {
     try {
       const col = await connectMongo();
       if (col) {
@@ -534,18 +520,34 @@ export async function initDatabase() {
           const { _id, ...cleanData } = doc;
           data = cleanData;
           saveLocalDb(data);
-          console.log(`✅ [MongoDB] โหลดข้อมูล ${data.items.length} รายการจาก MongoDB Atlas เรียบร้อย!`);
+          console.log(`✅ [MongoDB Atlas] ซิงค์และโหลดข้อมูลล่าสุด ${data.items.length} รายการจาก MongoDB Atlas เรียบร้อย!`);
         } else {
-          console.log('[MongoDB] ฐานข้อมูลคลาวด์ยังว่างอยู่ กำลังอัปโหลดข้อมูลเริ่มต้นขึ้นคลาวด์...');
+          console.log('[MongoDB Atlas] ฐานข้อมูลคลาวด์ยังว่างอยู่ กำลังอัปโหลดข้อมูลเริ่มต้นและรายชื่อพนักงานขึ้น MongoDB...');
           await col.replaceOne(
             { _id: 'main_store' },
             { _id: 'main_store', ...data, updatedAt: new Date().toISOString() },
             { upsert: true }
           );
+          console.log(`✅ [MongoDB Atlas] บันทึกข้อมูลเริ่มต้น ${data.items.length} รายการขึ้น MongoDB Atlas สำเร็จ!`);
         }
       }
     } catch (err) {
-      console.error('⚠️ [MongoDB] Init sync failed:', err.message);
+      console.error('⚠️ [MongoDB Atlas] ไม่สามารถเชื่อมต่อหรือดึงข้อมูลเริ่มต้นได้:', err.message);
+    }
+  } else if (GITHUB_TOKEN) {
+    // 3. Fallback: If no MongoDB URI, sync with GitHub Cloud Database
+    try {
+      const remoteData = await fetchFromGitHub();
+      if (remoteData && Array.isArray(remoteData.items) && remoteData.items.length > 0) {
+        data = remoteData;
+        saveLocalDb(data);
+        console.log(`✅ [GitHub Cloud DB] ซิงค์และโหลดข้อมูลล่าสุด ${data.items.length} รายการจาก GitHub สำเร็จ!`);
+      } else {
+        console.log(`[GitHub Cloud DB] ยังไม่มีข้อมูลบน branch "${GITHUB_BRANCH}" กำลังอัปโหลดข้อมูลเริ่มต้นขึ้น GitHub...`);
+        await pushToGitHub(data);
+      }
+    } catch (err) {
+      console.error('⚠️ [GitHub Cloud DB] ซิงค์เริ่มต้นไม่สำเร็จ:', err.message);
     }
   }
 
@@ -578,22 +580,22 @@ export async function resetDatabase() {
 
 // Get DB status (for UI display and diagnostics)
 export function getDbStatus() {
-  const isCloud = isGitHubConnected || isMongoConnected;
+  const isCloud = isMongoConnected || isGitHubConnected;
   let mode = 'local_file';
   let provider = 'Local File';
 
-  if (isGitHubConnected) {
-    mode = 'github_cloud';
-    provider = 'GitHub';
-  } else if (isMongoConnected) {
+  if (isMongoConnected) {
     mode = 'mongodb_atlas';
     provider = 'MongoDB Atlas';
-  } else if (GITHUB_TOKEN) {
-    mode = 'connecting_github';
+  } else if (isGitHubConnected) {
+    mode = 'github_cloud';
     provider = 'GitHub';
   } else if (MONGODB_URI) {
     mode = 'connecting_mongodb';
     provider = 'MongoDB Atlas';
+  } else if (GITHUB_TOKEN) {
+    mode = 'connecting_github';
+    provider = 'GitHub';
   }
 
   return {
@@ -602,8 +604,8 @@ export function getDbStatus() {
     provider,
     persistent: isCloud,
     itemCount: cachedDb ? (cachedDb.items?.length || 0) : 0,
-    hasGitHubToken: !!GITHUB_TOKEN,
     hasMongoUri: !!MONGODB_URI,
+    hasGitHubToken: !!GITHUB_TOKEN,
     gitHubRepo: GITHUB_REPO,
     gitHubBranch: GITHUB_BRANCH,
     gitHubLastSync,
