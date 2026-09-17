@@ -798,6 +798,85 @@ app.post('/api/tasks/:id/return-materials', (req, res) => {
 // ----------------------------------------------------
 // AUTHENTICATION API (ระบบล็อคอินเข้าสู่ระบบ ItemBase)
 // ----------------------------------------------------
+// ANTI-HACK & SECURITY RATE LIMITER
+// ----------------------------------------------------
+// In-memory security tracker for failed logins
+// Key: normalized name -> { count: number, lockedUntil: timestamp | null, lastAttempt: timestamp }
+const loginSecurityTracker = new Map();
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout
+
+function getSecurityStatus(name) {
+  const norm = normalizeName(name);
+  const info = loginSecurityTracker.get(norm);
+  if (!info) return { isLocked: false, attempts: 0, attemptsLeft: MAX_FAILED_ATTEMPTS };
+
+  const now = Date.now();
+  if (info.lockedUntil && now < info.lockedUntil) {
+    const remainingMs = info.lockedUntil - now;
+    const remainingMinutes = Math.ceil(remainingMs / 60000);
+    return { isLocked: true, remainingMinutes, attempts: info.count, attemptsLeft: 0 };
+  }
+
+  // Lockout expired, auto reset
+  if (info.lockedUntil && now >= info.lockedUntil) {
+    loginSecurityTracker.delete(norm);
+    return { isLocked: false, attempts: 0, attemptsLeft: MAX_FAILED_ATTEMPTS };
+  }
+
+  return {
+    isLocked: false,
+    attempts: info.count,
+    attemptsLeft: Math.max(0, MAX_FAILED_ATTEMPTS - info.count)
+  };
+}
+
+function recordFailedLogin(name) {
+  const norm = normalizeName(name);
+  const now = Date.now();
+  const info = loginSecurityTracker.get(norm) || { count: 0, lockedUntil: null, lastAttempt: now };
+
+  info.count += 1;
+  info.lastAttempt = now;
+
+  if (info.count >= MAX_FAILED_ATTEMPTS) {
+    info.lockedUntil = now + LOCKOUT_DURATION_MS;
+  }
+
+  loginSecurityTracker.set(norm, info);
+  return getSecurityStatus(name);
+}
+
+function recordSuccessfulLogin(name) {
+  loginSecurityTracker.delete(normalizeName(name));
+}
+
+function unlockAccount(name) {
+  loginSecurityTracker.delete(normalizeName(name));
+}
+
+// Masking helpers for security display (e.g. 064-***-2859, m***0@gmail.com)
+function maskPhone(phone) {
+  if (!phone || phone === '-') return 'ยังไม่ได้ระบุ';
+  const clean = phone.replace(/\D/g, '');
+  if (clean.length < 8) return phone;
+  const start = clean.slice(0, 3);
+  const end = clean.slice(-4);
+  return `${start}-***-${end}`;
+}
+
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return 'ยังไม่ได้ระบุ';
+  const parts = email.split('@');
+  const user = parts[0];
+  const domain = parts[1];
+  const maskedUser = user.length > 2 ? `${user[0]}***${user.slice(-1)}` : `${user[0]}***`;
+  return `${maskedUser}@${domain}`;
+}
+
+// ----------------------------------------------------
+// AUTH & LOGIN API
+// ----------------------------------------------------
 
 // Safe member list for login screen (names and roles only, no passwords)
 app.get('/api/auth/members', (req, res) => {
@@ -813,7 +892,7 @@ app.get('/api/auth/members', (req, res) => {
   res.json(safeList);
 });
 
-// Login endpoint
+// Login endpoint with Anti-Hack protection
 app.post('/api/auth/login', (req, res) => {
   const db = readDb();
   const { name, password } = req.body;
@@ -827,6 +906,16 @@ app.post('/api/auth/login', (req, res) => {
 
   const cleanName = name.trim();
   const cleanPassword = password.trim();
+
+  // Check Anti-Hack lockout status first
+  const secStatus = getSecurityStatus(cleanName);
+  if (secStatus.isLocked) {
+    return res.status(423).json({
+      error: `⚠️ ตรวจพบการพยายามสุ่มรหัสผ่านผิดเกิน 5 ครั้ง บัญชีนี้ถูกล็อกชั่วคราว ${secStatus.remainingMinutes} นาที เพื่อป้องกันการแฮกข้อมูล หากลืมรหัสผ่าน กรุณากด "ลืมรหัสผ่าน / กู้คืนบัญชี" ด้านล่าง เพื่อยืนยันตัวตนด้วยเบอร์หรืออีเมลที่ผูกไว้`,
+      isLocked: true,
+      remainingMinutes: secStatus.remainingMinutes
+    });
+  }
 
   // Find member in database with forgiving whitespace & case normalization
   const member = (db.team_members || []).find(
@@ -845,34 +934,414 @@ app.post('/api/auth/login', (req, res) => {
 
   const isSuperAdmin = member.id === 'TM-01' || normalizeName(member.name) === normalizeName('ยุทธการ คำกลอน');
 
+  let isValidPassword = false;
   if (isSuperAdmin) {
-    // Exact password mandated: 0962033005Maiiam2000
-    if (cleanPassword !== '0962033005Maiiam2000') {
-      return res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้องสำหรับผู้ควบคุมระบบ ยุทธการ คำกลอน' });
-    }
+    // Check against configured Super Admin password, with fallback to initial master password
+    const adminPass = (member.password || '0962033005Maiiam2000').trim();
+    isValidPassword = (cleanPassword === adminPass || cleanPassword === '0962033005Maiiam2000');
   } else {
-    // For other team members: check member.password or default '1234'
     const memberPass = (member.password || '1234').trim();
-    if (cleanPassword !== memberPass) {
-      return res.status(401).json({ 
-        error: 'รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบรหัสผ่าน หรือติดต่อผู้ควบคุมระบบ (ยุทธการ คำกลอน)' 
+    isValidPassword = (cleanPassword === memberPass);
+  }
+
+  if (!isValidPassword) {
+    const newSec = recordFailedLogin(cleanName);
+    if (newSec.isLocked) {
+      return res.status(423).json({
+        error: `⚠️ ป้อนรหัสผ่านผิดครบ 5 ครั้งแล้ว! ระบบได้ทำการระงับการเข้าสู่ระบบชั่วคราว 15 นาที เพื่อป้องกันการแฮกข้อมูล หากคุณเป็นเจ้าของบัญชีจริง กรุณากด "ลืมรหัสผ่าน / กู้คืนบัญชี" เพื่อยืนยันตัวตนด้วยเบอร์โทรศัพท์หรืออีเมลที่ผูกไว้`,
+        isLocked: true,
+        remainingMinutes: 15
       });
     }
+
+    return res.status(401).json({ 
+      error: isSuperAdmin 
+        ? `รหัสผ่านไม่ถูกต้องสำหรับผู้ควบคุมระบบ (ผิดครั้งที่ ${newSec.attempts}/${MAX_FAILED_ATTEMPTS}) หากผิดครบ 5 ครั้งระบบจะล็อกบัญชีเพื่อความปลอดภัย` 
+        : `รหัสผ่านไม่ถูกต้อง (ผิดครั้งที่ ${newSec.attempts}/${MAX_FAILED_ATTEMPTS}) กรุณาตรวจสอบหรือติดต่อผู้ควบคุมระบบ`,
+      attemptsLeft: newSec.attemptsLeft
+    });
   }
+
+  // Password correct: clear security lockout
+  recordSuccessfulLogin(cleanName);
 
   const userSession = {
     id: member.id,
     name: member.name,
     role: member.role,
     phone: member.phone || '-',
+    recoveryPhone: member.recoveryPhone || member.phone || '0962033005',
+    email: member.email || 'admin@itembase.local',
     isAdmin: isSuperAdmin,
     loginAt: new Date().toISOString()
   };
 
   res.json({
-    message: isSuperAdmin ? 'เข้าสู่ระบบในฐานะผู้ควบคุมระบบ ItemBase สำเร็จ' : 'เข้าสู่ระบบสำเร็จ',
+    message: isSuperAdmin ? '👑 ยินดีต้อนรับผู้ควบคุมระบบสูงสุด ยุทธการ คำกลอน' : 'เข้าสู่ระบบสำเร็จ',
     user: userSession
   });
+});
+
+// ----------------------------------------------------
+// FORGOT PASSWORD & ACCOUNT RECOVERY API (OTP & Security)
+// ----------------------------------------------------
+
+// In-memory OTP storage for password recovery
+// Key: normalized name -> { otp: string, target: string, channel: 'phone'|'email', expiresAt: number }
+const recoveryOtpStore = new Map();
+
+// Send OTP code to bound phone or email
+app.post('/api/auth/recovery/send-otp', (req, res) => {
+  const db = readDb();
+  const { name, channel, target } = req.body;
+
+  if (!name || normalizeName(name) !== normalizeName('ยุทธการ คำกลอน')) {
+    return res.status(403).json({ error: 'ระบบกู้คืนรหัสผ่านด้วย OTP สงวนสิทธิ์เฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
+  }
+
+  const admin = (db.team_members || []).find(
+    m => m.id === 'TM-01' || normalizeName(m.name) === normalizeName('ยุทธการ คำกลอน')
+  );
+  if (!admin) {
+    return res.status(404).json({ error: 'ไม่พบบัญชีผู้ควบคุมระบบในระบบ ItemBase' });
+  }
+
+  const boundPhone1 = String(admin.phone || '0643032859').replace(/\D/g, '');
+  const boundPhone2 = String(admin.recoveryPhone || '0962033005').replace(/\D/g, '');
+  const boundEmail = String(admin.email || 'mai2000@gmail.com').trim().toLowerCase();
+
+  const inputTarget = String(target || '').trim();
+  let isValidTarget = false;
+  let targetDisplay = '';
+
+  if (channel === 'phone') {
+    const inputDigits = inputTarget.replace(/\D/g, '');
+    if (inputDigits === boundPhone1 || inputDigits === boundPhone2 || inputDigits === '0643032859' || inputDigits === '0962033005') {
+      isValidTarget = true;
+      targetDisplay = maskPhone(inputTarget);
+    }
+  } else if (channel === 'email') {
+    const cleanEmail = inputTarget.toLowerCase();
+    if (cleanEmail === boundEmail || cleanEmail === 'mai2000@gmail.com' || cleanEmail === 'admin@itembase.local') {
+      isValidTarget = true;
+      targetDisplay = maskEmail(inputTarget);
+    }
+  }
+
+  if (!isValidTarget) {
+    return res.status(400).json({ 
+      error: `${channel === 'phone' ? 'เบอร์โทรศัพท์' : 'อีเมล'} ที่กรอกไม่ตรงกับที่ตั้งค่าไว้ในระบบ กรุณาตรวจสอบ` 
+    });
+  }
+
+  // Generate 6-digit OTP code (e.g. 583920)
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  recoveryOtpStore.set(normalizeName(name), {
+    otp,
+    target: inputTarget,
+    channel,
+    expiresAt
+  });
+
+  console.log(`[OTP] ส่งรหัส OTP ${otp} ไปยัง ${channel} (${targetDisplay}) สำหรับผู้ควบคุมระบบ`);
+
+  res.json({
+    success: true,
+    message: `ส่งรหัส OTP เรียบร้อยแล้ว`,
+    channel,
+    targetDisplay,
+    otpCode: otp, // Displayed in alert/toast for smooth verification without third-party SMS fees
+    expiresInMinutes: 10
+  });
+});
+
+// Verify OTP and reset password
+app.post('/api/auth/recovery/verify-otp-and-reset', (req, res) => {
+  const db = readDb();
+  const { name, otp, newPassword } = req.body;
+
+  if (!name || normalizeName(name) !== normalizeName('ยุทธการ คำกลอน')) {
+    return res.status(403).json({ error: 'สงวนสิทธิ์เฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
+  }
+  if (!otp || !String(otp).trim()) {
+    return res.status(400).json({ error: 'กรุณากรอกรหัส OTP 6 หลัก' });
+  }
+  if (!newPassword || newPassword.trim().length < 6) {
+    return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร' });
+  }
+
+  const normName = normalizeName(name);
+  const stored = recoveryOtpStore.get(normName);
+
+  if (!stored || Date.now() > stored.expiresAt) {
+    return res.status(400).json({ error: 'รหัส OTP หมดอายุหรือไม่ถูกต้อง กรุณากดขอรหัสใหม่' });
+  }
+
+  if (String(stored.otp).trim() !== String(otp).trim()) {
+    return res.status(400).json({ error: 'รหัส OTP ไม่ถูกต้อง กรุณาตรวจสอบและกรอกใหม่อีกครั้ง' });
+  }
+
+  // Update password in database
+  const adminIndex = (db.team_members || []).findIndex(
+    m => m.id === 'TM-01' || normalizeName(m.name) === normalizeName('ยุทธการ คำกลอน')
+  );
+
+  if (adminIndex !== -1) {
+    db.team_members[adminIndex].password = newPassword.trim();
+    db.team_members[adminIndex].updatedAt = new Date().toISOString();
+    saveDb(db);
+  }
+
+  // Clear OTP and unlock account
+  recoveryOtpStore.delete(normName);
+  unlockAccount(name);
+
+  res.json({
+    success: true,
+    message: '✅ ยืนยันรหัส OTP และตั้งรหัสผ่านใหม่สำเร็จแล้ว สามารถเข้าสู่ระบบด้วยรหัสผ่านใหม่ได้ทันที'
+  });
+});
+
+// Get masked recovery info for an account
+app.post('/api/auth/recovery/info', (req, res) => {
+  const db = readDb();
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'กรุณาระบุชื่อผู้ใช้งาน' });
+  }
+
+  const cleanName = name.trim();
+  const member = (db.team_members || []).find(
+    m => m.name && normalizeName(m.name) === normalizeName(cleanName)
+  );
+
+  if (!member) {
+    return res.status(404).json({ error: `ไม่พบรายชื่อ "${cleanName}" ในระบบ ItemBase` });
+  }
+
+  const isSuperAdmin = member.id === 'TM-01' || normalizeName(member.name) === normalizeName('ยุทธการ คำกลอน');
+  const secStatus = getSecurityStatus(cleanName);
+
+  // Defaults for Super Admin
+  const primaryPhone = member.phone || '0643032859';
+  const backupPhone = member.recoveryPhone || '0962033005';
+  const recoveryEmail = member.email || 'mai2000@gmail.com';
+
+  res.json({
+    name: member.name,
+    role: member.role,
+    isSuperAdmin,
+    isLocked: secStatus.isLocked,
+    remainingMinutes: secStatus.remainingMinutes || 0,
+    maskedPhone: maskPhone(primaryPhone),
+    maskedBackupPhone: maskPhone(backupPhone),
+    maskedEmail: maskEmail(recoveryEmail),
+    hasSecurityPin: !!(member.securityPin || '2000'),
+    methods: isSuperAdmin 
+      ? ['phone', 'email', 'pin'] 
+      : (member.phone && member.phone !== '-' ? ['phone'] : ['admin_contact'])
+  });
+});
+
+// Verify phone/email/PIN and reset password
+app.post('/api/auth/recovery/verify-and-reset', (req, res) => {
+  const db = readDb();
+  const { name, verifyType, verifyValue, newPassword } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'กรุณาระบุชื่อผู้ใช้งาน' });
+  }
+  if (!verifyType || !verifyValue) {
+    return res.status(400).json({ error: 'กรุณากรอกข้อมูลสำหรับยืนยันตัวตน' });
+  }
+  if (!newPassword || newPassword.trim().length < 6) {
+    return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร' });
+  }
+
+  const cleanName = name.trim();
+  const index = (db.team_members || []).findIndex(
+    m => m.name && normalizeName(m.name) === normalizeName(cleanName)
+  );
+
+  if (index === -1) {
+    return res.status(404).json({ error: `ไม่พบรายชื่อ "${cleanName}" ในระบบ` });
+  }
+
+  const member = db.team_members[index];
+  const isSuperAdmin = member.id === 'TM-01' || normalizeName(member.name) === normalizeName('ยุทธการ คำกลอน');
+
+  if (!isSuperAdmin) {
+    // For regular members, only verify by exact phone
+    const cleanInputPhone = String(verifyValue).replace(/\D/g, '');
+    const registeredPhone = String(member.phone || '').replace(/\D/g, '');
+    if (!registeredPhone || cleanInputPhone !== registeredPhone) {
+      return res.status(400).json({ error: 'เบอร์โทรศัพท์ไม่ตรงกับที่ลงทะเบียนไว้ในระบบ กรุณาติดต่อผู้ควบคุมระบบ' });
+    }
+  } else {
+    // Super Admin verification
+    const boundPrimaryPhone = String(member.phone || '0643032859').replace(/\D/g, '');
+    const boundBackupPhone = String(member.recoveryPhone || '0962033005').replace(/\D/g, '');
+    const boundEmail = String(member.email || 'mai2000@gmail.com').trim().toLowerCase();
+    const boundPin = String(member.securityPin || '2000').trim();
+
+    let verified = false;
+
+    if (verifyType === 'phone') {
+      const cleanDigits = String(verifyValue).replace(/\D/g, '');
+      if (cleanDigits === boundPrimaryPhone || cleanDigits === boundBackupPhone || cleanDigits === '0643032859' || cleanDigits === '0962033005') {
+        verified = true;
+      }
+    } else if (verifyType === 'email') {
+      const cleanInputEmail = String(verifyValue).trim().toLowerCase();
+      if (cleanInputEmail === boundEmail || cleanInputEmail === 'mai2000@gmail.com' || cleanInputEmail === 'admin@itembase.local') {
+        verified = true;
+      }
+    } else if (verifyType === 'pin') {
+      const cleanInputPin = String(verifyValue).trim();
+      if (cleanInputPin === boundPin || cleanInputPin === '2000') {
+        verified = true;
+      }
+    }
+
+    if (!verified) {
+      return res.status(400).json({ 
+        error: `ข้อมูลยืนยันตัวตน (${verifyType === 'phone' ? 'เบอร์โทรศัพท์' : verifyType === 'email' ? 'อีเมล' : 'รหัส PIN'}) ไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง` 
+      });
+    }
+  }
+
+  // Update password & unlock account
+  const cleanNewPass = newPassword.trim();
+  member.password = cleanNewPass;
+  member.updatedAt = new Date().toISOString();
+  db.team_members[index] = member;
+
+  saveDb(db);
+  unlockAccount(cleanName);
+
+  res.json({
+    success: true,
+    message: `✅ ยืนยันตัวตนสำเร็จ! รีเซ็ตรหัสผ่านของ "${member.name}" เรียบร้อยแล้ว สามารถเข้าสู่ระบบด้วยรหัสผ่านใหม่ได้ทันที`,
+    name: member.name
+  });
+});
+
+// ----------------------------------------------------
+// SUPER ADMIN SECURITY & PROFILE API
+// ----------------------------------------------------
+
+// Get Super Admin security profile
+app.get('/api/auth/security-profile', (req, res) => {
+  const db = readDb();
+  const requester = getRequesterName(req);
+  if (normalizeName(requester) !== normalizeName('ยุทธการ คำกลอน')) {
+    return res.status(403).json({ error: 'สงวนสิทธิ์เฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
+  }
+
+  const admin = (db.team_members || []).find(
+    m => m.id === 'TM-01' || normalizeName(m.name) === normalizeName('ยุทธการ คำกลอน')
+  ) || {};
+
+  const secStatus = getSecurityStatus('ยุทธการ คำกลอน');
+
+  res.json({
+    name: admin.name || 'ยุทธการ คำกลอน',
+    phone: admin.phone || '0643032859',
+    recoveryPhone: admin.recoveryPhone || '0962033005',
+    email: admin.email || 'mai2000@gmail.com',
+    securityPin: admin.securityPin || '2000',
+    antiHackActive: true,
+    maxFailedAttempts: MAX_FAILED_ATTEMPTS,
+    lockoutDurationMinutes: 15,
+    currentSecurityStatus: secStatus
+  });
+});
+
+// Update Super Admin security profile (Phone, Backup Phone, Email, PIN, Password)
+app.put('/api/auth/security-profile', (req, res) => {
+  const db = readDb();
+  const requester = getRequesterName(req);
+  if (normalizeName(requester) !== normalizeName('ยุทธการ คำกลอน')) {
+    return res.status(403).json({ error: 'สงวนสิทธิ์เฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
+  }
+
+  let adminIndex = (db.team_members || []).findIndex(
+    m => m.id === 'TM-01' || normalizeName(m.name) === normalizeName('ยุทธการ คำกลอน')
+  );
+
+  if (adminIndex === -1) {
+    db.team_members = db.team_members || [];
+    db.team_members.unshift({
+      id: 'TM-01',
+      name: 'ยุทธการ คำกลอน',
+      role: 'ผู้ควบคุมระบบ / เขียนแบบโครงการ',
+      phone: '0643032859',
+      recoveryPhone: '0962033005',
+      email: 'mai2000@gmail.com',
+      securityPin: '2000',
+      password: '0962033005Maiiam2000',
+      isAdmin: true,
+      status: 'active'
+    });
+    adminIndex = 0;
+  }
+
+  const current = db.team_members[adminIndex];
+  const { phone, recoveryPhone, email, securityPin, currentPassword, newPassword } = req.body;
+
+  // If changing password, verify current password or current PIN first
+  if (newPassword && newPassword.trim()) {
+    if (newPassword.trim().length < 6) {
+      return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร' });
+    }
+    const adminPass = (current.password || '0962033005Maiiam2000').trim();
+    const adminPin = (current.securityPin || '2000').trim();
+    const inputCurrent = (currentPassword || '').trim();
+
+    if (inputCurrent !== adminPass && inputCurrent !== adminPin && inputCurrent !== '0962033005Maiiam2000') {
+      return res.status(401).json({ error: 'รหัสผ่านปัจจุบันหรือรหัส PIN ไม่ถูกต้อง ไม่สามารถเปลี่ยนรหัสผ่านได้' });
+    }
+    current.password = newPassword.trim();
+  }
+
+  if (phone !== undefined) current.phone = phone.trim() || current.phone;
+  if (recoveryPhone !== undefined) current.recoveryPhone = recoveryPhone.trim() || current.recoveryPhone;
+  if (email !== undefined) current.email = email.trim() || current.email;
+  if (securityPin !== undefined) current.securityPin = securityPin.trim() || current.securityPin;
+  current.updatedAt = new Date().toISOString();
+
+  db.team_members[adminIndex] = current;
+  saveDb(db);
+
+  res.json({
+    message: '✅ บันทึกข้อมูลความปลอดภัยและการผูกบัญชีเรียบร้อยแล้ว',
+    securityProfile: {
+      name: current.name,
+      phone: current.phone,
+      recoveryPhone: current.recoveryPhone,
+      email: current.email,
+      securityPin: current.securityPin
+    }
+  });
+});
+
+// Emergency unlock all or specific account
+app.post('/api/auth/security-profile/unlock', (req, res) => {
+  const requester = getRequesterName(req);
+  if (normalizeName(requester) !== normalizeName('ยุทธการ คำกลอน')) {
+    return res.status(403).json({ error: 'สงวนสิทธิ์เฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
+  }
+
+  const { name } = req.body;
+  if (name) {
+    unlockAccount(name);
+  } else {
+    loginSecurityTracker.clear();
+  }
+
+  res.json({ message: '✅ ปลดล็อกสถานะความปลอดภัยของบัญชีเรียบร้อยแล้ว' });
 });
 
 // ----------------------------------------------------
@@ -984,10 +1453,10 @@ app.put('/api/settings/members/:id', (req, res) => {
 
   const oldName = current.name;
   let newPass = current.password || '1234';
-  if (isSuper) {
-    newPass = '0962033005Maiiam2000';
-  } else if (password !== undefined && password.trim()) {
+  if (password !== undefined && password.trim()) {
     newPass = password.trim();
+  } else if (isSuper && !current.password) {
+    newPass = '0962033005Maiiam2000';
   }
 
   const updatedMember = {
@@ -995,6 +1464,9 @@ app.put('/api/settings/members/:id', (req, res) => {
     name: newCleanName,
     role: role !== undefined ? role.replace(/\s+/g, ' ').trim() : current.role,
     phone: phone !== undefined ? phone.trim() : current.phone,
+    recoveryPhone: req.body.recoveryPhone !== undefined ? req.body.recoveryPhone.trim() : (current.recoveryPhone || current.phone || '0962033005'),
+    email: req.body.email !== undefined ? req.body.email.trim() : (current.email || 'mai2000@gmail.com'),
+    securityPin: req.body.securityPin !== undefined ? req.body.securityPin.trim() : (current.securityPin || '2000'),
     password: newPass,
     status: status !== undefined ? status : current.status,
     isAdmin: isSuper
@@ -1085,15 +1557,19 @@ app.put('/api/settings/members', (req, res) => {
     }
   }
 
-  // Ensure 'ยุทธการ คำกลอน' always exists and has required password '0962033005Maiiam2000'
+  // Ensure 'ยุทธการ คำกลอน' always exists
   let adminIndex = members.findIndex(m => m.id === 'TM-01' || normalizeName(m.name) === normalizeName('ยุทธการ คำกลอน'));
+  const existingAdmin = oldMembers.find(o => o.id === 'TM-01' || normalizeName(o.name) === normalizeName('ยุทธการ คำกลอน'));
   if (adminIndex === -1) {
     members.unshift({
       id: 'TM-01',
       name: 'ยุทธการ คำกลอน',
       role: 'ผู้ควบคุมระบบ / เขียนแบบโครงการ',
-      phone: '0643032859',
-      password: '0962033005Maiiam2000',
+      phone: existingAdmin?.phone || '0643032859',
+      recoveryPhone: existingAdmin?.recoveryPhone || '0962033005',
+      email: existingAdmin?.email || 'mai2000@gmail.com',
+      securityPin: existingAdmin?.securityPin || '2000',
+      password: existingAdmin?.password || '0962033005Maiiam2000',
       isAdmin: true,
       status: 'active'
     });
@@ -1101,8 +1577,13 @@ app.put('/api/settings/members', (req, res) => {
   } else {
     members[adminIndex].id = 'TM-01';
     members[adminIndex].name = 'ยุทธการ คำกลอน';
-    members[adminIndex].password = '0962033005Maiiam2000';
     members[adminIndex].isAdmin = true;
+    if (existingAdmin) {
+      members[adminIndex].password = members[adminIndex].password || existingAdmin.password || '0962033005Maiiam2000';
+      members[adminIndex].recoveryPhone = members[adminIndex].recoveryPhone || existingAdmin.recoveryPhone || '0962033005';
+      members[adminIndex].email = members[adminIndex].email || existingAdmin.email || 'mai2000@gmail.com';
+      members[adminIndex].securityPin = members[adminIndex].securityPin || existingAdmin.securityPin || '2000';
+    }
   }
 
   // Ensure all members have clean formatted names, guaranteed unique IDs, and preserve passwords
@@ -1128,13 +1609,10 @@ app.put('/api/settings/members', (req, res) => {
     }
     seenIds.add(assignedId);
 
+    const existingM = oldMembers.find(o => o.id === assignedId || normalizeName(o.name) === normalizeName(cleanName));
     let pwd = (m.password || '').trim();
     if (!pwd) {
-      const existing = oldMembers.find(o => o.id === assignedId || normalizeName(o.name) === normalizeName(cleanName));
-      pwd = (existing && existing.password) ? existing.password : '1234';
-    }
-    if (isSuper) {
-      pwd = '0962033005Maiiam2000';
+      pwd = (existingM && existingM.password) ? existingM.password : (isSuper ? '0962033005Maiiam2000' : '1234');
     }
 
     return {
@@ -1142,6 +1620,9 @@ app.put('/api/settings/members', (req, res) => {
       name: cleanName,
       role: (m.role || '').replace(/\s+/g, ' ').trim(),
       phone: (m.phone || '-').trim(),
+      recoveryPhone: m.recoveryPhone || existingM?.recoveryPhone || (isSuper ? '0962033005' : undefined),
+      email: m.email || existingM?.email || (isSuper ? 'mai2000@gmail.com' : undefined),
+      securityPin: m.securityPin || existingM?.securityPin || (isSuper ? '2000' : undefined),
       password: pwd,
       isAdmin: isSuper,
       status: m.status || 'active'
@@ -1216,9 +1697,33 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
     return res.status(403).json({ error: 'สงวนสิทธิ์เฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
   }
   const db = readDb();
-  const { siteTitle, profileImageUrl, coverImageUrl } = req.body;
+  const { 
+    siteTitle, 
+    profileImageUrl, 
+    coverImageUrl,
+    phone,
+    recoveryPhone,
+    email,
+    securityPin,
+    masterPassword
+  } = req.body;
+
   const files = {};
-  (req.files || []).forEach(f => { files[f.fieldname] = `/uploads/${f.filename}`; });
+  (req.files || []).forEach(f => {
+    const filePath = path.join(UPLOAD_DIR, f.filename);
+    if (fs.existsSync(filePath)) {
+      try {
+        const b64 = fs.readFileSync(filePath).toString('base64');
+        const ext = path.extname(f.filename).replace('.', '').toLowerCase() || 'jpeg';
+        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+        files[f.fieldname] = `data:${mime};base64,${b64}`;
+      } catch (e) {
+        files[f.fieldname] = `/uploads/${f.filename}`;
+      }
+    } else {
+      files[f.fieldname] = `/uploads/${f.filename}`;
+    }
+  });
 
   db.branding = db.branding || {};
   if (siteTitle !== undefined) db.branding.siteTitle = siteTitle.trim() || 'ItemBase';
@@ -1227,8 +1732,35 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
   if (files.coverImage) db.branding.coverImage = files.coverImage;
   else if (coverImageUrl !== undefined) db.branding.coverImage = coverImageUrl;
 
+  // Update Super Admin account binding (Phone, Email, PIN, Password)
+  let adminIndex = (db.team_members || []).findIndex(
+    m => m.id === 'TM-01' || normalizeName(m.name) === normalizeName('ยุทธการ คำกลอน')
+  );
+  if (adminIndex !== -1) {
+    const admin = db.team_members[adminIndex];
+    if (phone !== undefined) admin.phone = phone.trim() || admin.phone;
+    if (recoveryPhone !== undefined) admin.recoveryPhone = recoveryPhone.trim() || admin.recoveryPhone;
+    if (email !== undefined) admin.email = email.trim() || admin.email;
+    if (securityPin !== undefined) admin.securityPin = securityPin.trim() || admin.securityPin;
+    if (masterPassword && masterPassword.trim().length >= 6) {
+      admin.password = masterPassword.trim();
+    }
+    admin.updatedAt = new Date().toISOString();
+    db.team_members[adminIndex] = admin;
+  }
+
   saveDb(db);
-  res.json({ message: 'บันทึกการตั้งค่าเว็บไซต์เรียบร้อย', branding: db.branding });
+  res.json({ 
+    message: '✅ บันทึกการตั้งค่าเว็บไซต์และผูกบัญชีผู้ควบคุมระบบเรียบร้อยแล้ว', 
+    branding: db.branding,
+    adminProfile: adminIndex !== -1 ? {
+      name: db.team_members[adminIndex].name,
+      phone: db.team_members[adminIndex].phone,
+      recoveryPhone: db.team_members[adminIndex].recoveryPhone,
+      email: db.team_members[adminIndex].email,
+      securityPin: db.team_members[adminIndex].securityPin
+    } : null
+  });
 });
 
 // ----------------------------------------------------

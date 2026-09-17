@@ -42,7 +42,7 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 // Initial Seed Data
 const defaultSeed = {
   team_members: [
-    { id: "TM-01", name: "ยุทธการ คำกลอน", role: "ผู้ควบคุมระบบ / เขียนแบบโครงการ", phone: "0643032859", password: "0962033005Maiiam2000", isAdmin: true, status: "active" },
+    { id: "TM-01", name: "ยุทธการ คำกลอน", role: "ผู้ควบคุมระบบ / เขียนแบบโครงการ", phone: "0643032859", recoveryPhone: "0962033005", email: "mai2000@gmail.com", securityPin: "2000", password: "0962033005Maiiam2000", isAdmin: true, status: "active" },
     { id: "TM-10", name: "สมโภช สุทินธุ์", role: "ช่างประสานงานและฝ่ายจัดส่งสินค้า", phone: "-", password: "1234", isAdmin: false, status: "active" },
     { id: "TM-04", name: "นายวีรศักดิ์ อนุพันธ์", role: "ผู้จัดการโครงการ", phone: "-", password: "1234", isAdmin: false, status: "active" },
     { id: "TM-05", name: "Leena", role: "เจ้าหน้าที่นับและตรวจสต็อก", phone: "-", password: "1234", isAdmin: false, status: "active" },

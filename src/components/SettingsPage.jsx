@@ -19,7 +19,14 @@ import {
   Eye,
   EyeOff,
   KeyRound,
-  RefreshCw
+  RefreshCw,
+  Phone,
+  Mail,
+  ShieldAlert,
+  CheckCircle2,
+  Palette,
+  Image as ImageIcon,
+  Camera
 } from 'lucide-react';
 
 export default function SettingsPage({ 
@@ -41,7 +48,7 @@ export default function SettingsPage({
   dbStatus = {}
 }) {
   const isAdmin = authUser?.isAdmin || currentUser === 'ยุทธการ คำกลอน';
-  const [activeSubTab, setActiveSubTab] = useState('members'); // 'members', 'locations', 'categories', 'backup', 'branding'
+  const [activeSubTab, setActiveSubTab] = useState('members'); // 'members', 'security', 'locations', 'categories', 'backup', 'branding'
 
   // Branding state
   const [siteTitleInput, setSiteTitleInput] = useState(branding.siteTitle || 'ItemBase');
@@ -62,6 +69,20 @@ export default function SettingsPage({
   const [editPhone, setEditPhone] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [showPasswords, setShowPasswords] = useState(false);
+
+  // Super Admin Security & Account Binding state
+  const [secPhone, setSecPhone] = useState('0643032859');
+  const [secRecoveryPhone, setSecRecoveryPhone] = useState('0962033005');
+  const [secEmail, setSecEmail] = useState('mai2000@gmail.com');
+  const [secPin, setSecPin] = useState('2000');
+  const [secCurrentPassword, setSecCurrentPassword] = useState('');
+  const [secNewPassword, setSecNewPassword] = useState('');
+  const [secConfirmPassword, setSecConfirmPassword] = useState('');
+  const [secShowPasswords, setSecShowPasswords] = useState(false);
+  const [secLoading, setSecLoading] = useState(false);
+  const [secSaveMessage, setSecSaveMessage] = useState('');
+  const [secErrorMessage, setSecErrorMessage] = useState('');
+  const [secStatus, setSecStatus] = useState(null);
 
   // Location editing state
   const [locationsList, setLocationsList] = useState([...locations]);
@@ -125,6 +146,117 @@ export default function SettingsPage({
   const showSaved = (msg) => {
     setSaveMessage(msg);
     setTimeout(() => setSaveMessage(''), 3000);
+  };
+
+  // --- Super Admin Security Handlers ---
+  const fetchSecurityProfile = async () => {
+    try {
+      const res = await fetch('/api/auth/security-profile', {
+        headers: { 'x-user-name': encodeURIComponent('ยุทธการ คำกลอน') }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.phone) setSecPhone(data.phone);
+        if (data.recoveryPhone) setSecRecoveryPhone(data.recoveryPhone);
+        if (data.email) setSecEmail(data.email);
+        if (data.securityPin) setSecPin(data.securityPin);
+        setSecStatus(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch security profile:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchSecurityProfile();
+    }
+  }, [isAdmin]);
+
+  const handleSaveAllBrandingAndSecurity = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setSecSaveMessage('');
+    setSecErrorMessage('');
+
+    if (secNewPassword && secNewPassword.length < 6) {
+      setSecErrorMessage('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร');
+      return;
+    }
+    if (secNewPassword && secNewPassword !== secConfirmPassword) {
+      setSecErrorMessage('รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน');
+      return;
+    }
+
+    setSecLoading(true);
+    try {
+      // 1. Call onSaveBranding to persist title, images, and bound credentials
+      if (onSaveBranding) {
+        await onSaveBranding({
+          siteTitle: siteTitleInput,
+          profileImageFile,
+          profileImageUrl: profileImageFile ? undefined : profilePreview,
+          coverImageFile,
+          coverImageUrl: coverImageFile ? undefined : coverPreview,
+          phone: secPhone,
+          recoveryPhone: secRecoveryPhone,
+          email: secEmail,
+          securityPin: secPin,
+          masterPassword: secNewPassword || undefined
+        });
+      }
+
+      // 2. Sync to /api/auth/security-profile
+      const res = await fetch('/api/auth/security-profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-name': encodeURIComponent('ยุทธการ คำกลอน')
+        },
+        body: JSON.stringify({
+          phone: secPhone,
+          recoveryPhone: secRecoveryPhone,
+          email: secEmail,
+          securityPin: secPin,
+          currentPassword: secCurrentPassword,
+          newPassword: secNewPassword
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'บันทึกข้อมูลไม่สำเร็จ');
+
+      setSecSaveMessage('✅ บันทึกการตั้งค่าเว็บไซต์และผูกบัญชีความปลอดภัยเรียบร้อยแล้ว!');
+      setProfileImageFile(null);
+      setCoverImageFile(null);
+      setSecCurrentPassword('');
+      setSecNewPassword('');
+      setSecConfirmPassword('');
+      fetchSecurityProfile();
+      setTimeout(() => setSecSaveMessage(''), 4000);
+    } catch (err) {
+      setSecErrorMessage(err.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    } finally {
+      setSecLoading(false);
+    }
+  };
+
+  const handleUnlockAll = async () => {
+    if (!confirm('ต้องการปลดล็อกการระงับบัญชีทั้งหมดใช่หรือไม่?')) return;
+    try {
+      const res = await fetch('/api/auth/security-profile/unlock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-name': encodeURIComponent('ยุทธการ คำกลอน')
+        },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      alert(data.message || 'ปลดล็อกเรียบร้อยแล้ว');
+      fetchSecurityProfile();
+    } catch (e) {
+      alert('เกิดข้อผิดพลาด: ' + e.message);
+    }
   };
 
   // --- Members handlers ---
@@ -206,7 +338,7 @@ export default function SettingsPage({
           name: isSuper ? 'ยุทธการ คำกลอน' : cleanEditName,
           role: editRole.trim() || (current ? current.role : 'ช่างหน้างาน'),
           phone: editPhone.trim() || (current ? current.phone : '-'),
-          password: isSuper ? '0962033005Maiiam2000' : (editPassword.trim() || (current ? current.password : '1234'))
+          password: editPassword.trim() || (current ? current.password : (isSuper ? '0962033005Maiiam2000' : '1234'))
         });
         setEditingMemberId(null);
         showSaved('บันทึกการแก้ไขข้อมูลพนักงานและรหัสผ่านเรียบร้อย');
@@ -223,7 +355,7 @@ export default function SettingsPage({
           name: isSuper ? 'ยุทธการ คำกลอน' : cleanEditName,
           role: editRole.trim() || 'ช่างหน้างาน',
           phone: editPhone.trim() || '-',
-          password: isSuper ? '0962033005Maiiam2000' : (editPassword.trim() || m.password || '1234')
+          password: editPassword.trim() || m.password || (isSuper ? '0962033005Maiiam2000' : '1234')
         };
       }
       return m;
@@ -433,12 +565,12 @@ export default function SettingsPage({
           onClick={() => setActiveSubTab('branding')}
           className={`flex items-center gap-2 py-3 px-4 border-b-2 transition whitespace-nowrap ${
             activeSubTab === 'branding'
-              ? 'border-orange-500 text-orange-600'
+              ? 'border-orange-500 text-orange-600 font-bold bg-orange-50/40'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <span>🎨</span>
-          <span>แบรนด์เว็บไซต์</span>
+          <span>แบรนด์เว็บไซต์ & ผูกบัญชี</span>
         </button>
       </div>
 
@@ -484,7 +616,7 @@ export default function SettingsPage({
                   {membersList.map((m) => {
                     const isEditing = editingMemberId === m.id;
                     const isSystemAdmin = m.id === 'TM-01' || m.isAdmin || m.name === "ยุทธการ คำกลอน";
-                    const currentPass = isSystemAdmin ? '0962033005Maiiam2000' : (m.password || '1234');
+                    const currentPass = isSystemAdmin ? (m.password || '0962033005Maiiam2000') : (m.password || '1234');
 
                     return (
                       <tr key={m.id} className="hover:bg-slate-50/80">
@@ -545,8 +677,17 @@ export default function SettingsPage({
                         <td className="py-3 px-4">
                           {isEditing ? (
                             isSystemAdmin ? (
-                              <div className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                                0962033005Maiiam2000 (ล็อคสำหรับผู้ควบคุมระบบ)
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  type="text"
+                                  value={editPassword}
+                                  onChange={(e) => setEditPassword(e.target.value)}
+                                  placeholder="รหัสผ่านผู้ควบคุม..."
+                                  className="w-full border border-amber-300 bg-amber-50/50 rounded px-2 py-1 text-xs font-mono text-amber-900"
+                                />
+                                <span className="text-[10px] text-amber-700">
+                                  👑 หรือจัดการได้ที่แท็บ "ความปลอดภัย & ผูกบัญชี"
+                                </span>
                               </div>
                             ) : (
                               <input
@@ -971,114 +1112,490 @@ export default function SettingsPage({
         </div>
       )}
 
-      {/* TAB CONTENT: BRANDING */}
+      {/* TAB CONTENT: BRANDING & SUPER ADMIN SECURITY BINDING */}
       {activeSubTab === 'branding' && (
-        <div className="bg-white p-6 rounded-b-2xl rounded-tr-2xl shadow-sm border border-slate-200 space-y-6">
-          <div>
-            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <span>🎨</span>
-              <span>ตั้งค่าแบรนด์เว็บไซต์ ItemBase</span>
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">เปลี่ยนชื่อเว็บไซต์, รูปโปรไฟล์ และรูปหน้าปก (เฉพาะ ยุทธการ คำกลอน)</p>
+        <div className="bg-white p-6 rounded-b-2xl rounded-tr-2xl shadow-sm border border-slate-200 space-y-6 animate-fadeIn">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+            <div>
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Palette className="w-5 h-5 text-orange-500" />
+                <span>ตั้งค่าแบรนด์เว็บไซต์ และผูกบัญชีความปลอดภัย</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                จัดการชื่อระบบ, หน้าต่างพรีวิวรูปหน้าปก & รูปโปรไฟล์, และผูกเบอร์โทรศัพท์/อีเมลสำหรับกู้คืนรหัสผ่านด้วย OTP (เฉพาะ ยุทธการ คำกลอน)
+              </p>
+            </div>
+            <span className="text-xs px-3 py-1.5 bg-amber-50 text-amber-800 font-bold border border-amber-300 rounded-full flex items-center gap-1.5 shadow-sm self-start sm:self-center">
+              <span>👑 ผู้ควบคุมระบบสูงสุด: ยุทธการ คำกลอน (TM-01)</span>
+            </span>
           </div>
 
-          {/* Site title */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-slate-700">ชื่อเว็บไซต์ (แสดงใน Navbar และหน้าล็อกอิน)</label>
+          {/* Feedback Messages */}
+          {secSaveMessage && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 animate-fadeIn font-medium">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{secSaveMessage}</span>
+            </div>
+          )}
+
+          {secErrorMessage && (
+            <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2 animate-fadeIn font-medium">
+              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+              <span>{secErrorMessage}</span>
+            </div>
+          )}
+
+          {saveMessage && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 animate-fadeIn font-medium">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{saveMessage}</span>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* 1. VISUAL PREVIEW MOCKUP WINDOW (หน้าต่างพรีวิวรูปโปรไฟล์ & รูปหน้าปก) */}
+          {/* ========================================================= */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-orange-500" />
+                <span>1. หน้าต่างพรีวิวรูปโปรไฟล์และรูปหน้าปกเว็บไซต์ (Live Preview Window)</span>
+              </label>
+              <span className="text-[11px] text-slate-400">จำลองมุมมองจริงในระบบ</span>
+            </div>
+
+            {/* Mockup Frame */}
+            <div className="border border-slate-300 rounded-2xl overflow-hidden shadow-sm bg-slate-900">
+              {/* Browser Window Titlebar */}
+              <div className="bg-slate-950/90 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                  <span className="ml-2 font-mono text-slate-400 font-medium">preview.itembase.local</span>
+                </div>
+                <span className="text-amber-400/90 text-[10px] font-medium bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  ✨ พรีวิวแบบเรียลไทม์
+                </span>
+              </div>
+
+              {/* Cover Banner Area */}
+              <div className="relative h-44 sm:h-52 w-full bg-slate-850 overflow-hidden flex items-center justify-center">
+                {coverPreview ? (
+                  <img
+                    src={coverPreview}
+                    alt="Cover Banner"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center text-slate-500 p-4 text-center">
+                    <ImageIcon className="w-8 h-8 text-slate-600 mb-1" />
+                    <span className="text-xs font-medium text-slate-400">ยังไม่มีรูปหน้าปก</span>
+                    <span className="text-[10px] text-slate-500">ระบบจะใช้ภาพพื้นหลังสีเข้มมาตรฐานในหน้าล็อกอิน</span>
+                  </div>
+                )}
+
+                {/* Dark Gradient Overlay for text contrast */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none"></div>
+
+                {/* Overlaid Profile Avatar at Bottom Left */}
+                <div className="absolute -bottom-7 left-6 sm:left-8 flex items-end gap-3 z-10">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 border-white shadow-xl bg-slate-900 overflow-hidden flex items-center justify-center shrink-0">
+                    {profilePreview ? (
+                      <img
+                        src={profilePreview}
+                        alt="Profile Avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <HardHat className="w-10 h-10 text-orange-400" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Mockup Bottom Details Bar */}
+              <div className="pt-9 pb-4 px-6 sm:px-8 bg-slate-900 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                    <span>{siteTitleInput || 'ItemBase'}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                      ระบบคลัง & สต็อก
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-400">ระบบจัดการงานและตรวจนับวัสดุก่อสร้างออนไลน์</p>
+                </div>
+                <span className="text-xs text-amber-300 bg-amber-500/15 px-2.5 py-1 rounded-lg border border-amber-500/30 font-semibold flex items-center gap-1 self-start sm:self-center">
+                  👑 ยุทธการ คำกลอน (ผู้ควบคุมระบบสูงสุด)
+                </span>
+              </div>
+            </div>
+
+            {/* Upload & Management Controls for Profile & Cover */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              
+              {/* Profile Image Box */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-orange-500" />
+                    <span>รูปโปรไฟล์ / โลโก้เว็บไซต์</span>
+                  </label>
+                  {profilePreview && (
+                    <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">
+                      มีรูปแล้ว
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {profilePreview ? (
+                    <img
+                      src={profilePreview}
+                      alt="Profile Thumbnail"
+                      className="w-14 h-14 rounded-xl object-cover border border-slate-300 shadow-sm shrink-0"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl bg-slate-200 border border-slate-300 flex items-center justify-center shrink-0 text-slate-400">
+                      <HardHat className="w-6 h-6 text-slate-500" />
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-1.5">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold px-3 py-2 rounded-xl transition shadow-sm">
+                      <Upload className="w-3.5 h-3.5 text-orange-500" />
+                      <span>{profilePreview ? 'เปลี่ยนรูปโปรไฟล์' : 'เลือกรูปโปรไฟล์'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          const f = e.target.files[0];
+                          if (f) {
+                            setProfileImageFile(f);
+                            setProfilePreview(URL.createObjectURL(f));
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {profilePreview && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileImageFile(null);
+                          setProfilePreview('');
+                        }}
+                        className="ml-2 text-xs text-red-500 hover:text-red-700 font-medium transition"
+                      >
+                        ลบรูป
+                      </button>
+                    )}
+                    <p className="text-[10px] text-slate-400">แนะนำภาพสี่เหลี่ยมจัตุรัส (แปลงเป็น Base64 ปลอดภัยใน MongoDB)</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cover Image Box */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-orange-500" />
+                    <span>รูปหน้าปกเว็บไซต์ (Cover Banner)</span>
+                  </label>
+                  {coverPreview && (
+                    <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">
+                      มีรูปแล้ว
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {coverPreview ? (
+                    <img
+                      src={coverPreview}
+                      alt="Cover Thumbnail"
+                      className="w-20 h-14 rounded-xl object-cover border border-slate-300 shadow-sm shrink-0"
+                    />
+                  ) : (
+                    <div className="w-20 h-14 rounded-xl bg-slate-200 border border-slate-300 flex items-center justify-center shrink-0 text-slate-400">
+                      <ImageIcon className="w-6 h-6 text-slate-500" />
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-1.5">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold px-3 py-2 rounded-xl transition shadow-sm">
+                      <Upload className="w-3.5 h-3.5 text-orange-500" />
+                      <span>{coverPreview ? 'เปลี่ยนรูปหน้าปก' : 'เลือกรูปหน้าปก'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          const f = e.target.files[0];
+                          if (f) {
+                            setCoverImageFile(f);
+                            setCoverPreview(URL.createObjectURL(f));
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {coverPreview && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCoverImageFile(null);
+                          setCoverPreview('');
+                        }}
+                        className="ml-2 text-xs text-red-500 hover:text-red-700 font-medium transition"
+                      >
+                        ลบรูป
+                      </button>
+                    )}
+                    <p className="text-[10px] text-slate-400">แนะนำภาพแนวนอน 16:9 (แสดงพื้นหลังหน้าล็อกอินและแบนเนอร์)</p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* ========================================================= */}
+          {/* 2. SITE TITLE SETTINGS */}
+          {/* ========================================================= */}
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-2">
+            <label className="block text-xs font-bold text-slate-800">
+              2. ชื่อเว็บไซต์ / ระบบสต็อก (Site Title):
+            </label>
             <input
               type="text"
               value={siteTitleInput}
               onChange={e => setSiteTitleInput(e.target.value)}
               placeholder="ItemBase"
-              className="w-full max-w-sm text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500"
+              className="w-full max-w-md text-xs sm:text-sm bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-orange-500 font-semibold text-slate-800"
             />
+            <p className="text-[11px] text-slate-500">
+              ใช้แสดงผลในแถบนำทาง (Navbar), หน้าเข้าสู่ระบบ และหัวข้อแท็บของเบราว์เซอร์
+            </p>
           </div>
 
-          {/* Profile image */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-slate-700">รูปโปรไฟล์ / โลโก้ระบบ</label>
-            <div className="flex items-center gap-4">
-              {profilePreview && (
-                <img src={profilePreview} alt="profile" className="w-16 h-16 rounded-xl object-cover border border-slate-300 shadow-sm" />
-              )}
-              <label className="cursor-pointer flex items-center gap-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition">
-                <Upload className="w-4 h-4" />
-                <span>อัพโหลดรูปโปรไฟล์</span>
+          {/* ========================================================= */}
+          {/* 3. ACCOUNT RECOVERY BINDING (ผูกเบอร์กับอีเมล) */}
+          {/* ========================================================= */}
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-amber-600" />
+                  <span>3. ข้อมูลสำหรับผูกบัญชีกู้คืนรหัสผ่านด้วย OTP (Account Recovery Binding)</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  เมื่อคุณยุทธการกด "ลืมรหัสผ่าน" ที่หน้าเข้าสู่ระบบ ระบบจะส่งรหัส OTP ไปยังเบอร์หรืออีเมลที่ผูกไว้ด้านล่างนี้
+                </p>
+              </div>
+              <span className="text-[11px] text-amber-700 bg-amber-100/70 px-2.5 py-1 rounded-full font-semibold self-start sm:self-center">
+                เฉพาะ ยุทธการ คำกลอน
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Primary Phone */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>เบอร์โทรศัพท์หลัก (Primary Phone)</span>
+                </label>
                 <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => {
-                    const f = e.target.files[0];
-                    if (f) {
-                      setProfileImageFile(f);
-                      setProfilePreview(URL.createObjectURL(f));
-                    }
-                  }}
+                  type="text"
+                  value={secPhone}
+                  onChange={(e) => setSecPhone(e.target.value)}
+                  placeholder="เช่น 0643032859"
+                  className="w-full text-xs bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-amber-500 font-mono text-slate-800"
+                  required
                 />
-              </label>
-              {profilePreview && (
-                <button
-                  onClick={() => { setProfileImageFile(null); setProfilePreview(''); }}
-                  className="text-xs text-red-500 hover:text-red-700"
-                >ลบรูป</button>
-              )}
+                <p className="text-[10px] text-slate-400 mt-1">เบอร์โทรศัพท์หลักที่รับรหัสยืนยัน OTP ทาง SMS</p>
+              </div>
+
+              {/* Backup Recovery Phone */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-teal-600" />
+                  <span>เบอร์โทรศัพท์สำรองสำหรับกู้คืน (Backup Phone)</span>
+                </label>
+                <input
+                  type="text"
+                  value={secRecoveryPhone}
+                  onChange={(e) => setSecRecoveryPhone(e.target.value)}
+                  placeholder="เช่น 0962033005"
+                  className="w-full text-xs bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-amber-500 font-mono text-slate-800"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">เบอร์สำรองกรณีเบอร์หลักไม่สะดวกรับรหัส OTP</p>
+              </div>
+
+              {/* Recovery Email */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-blue-600" />
+                  <span>อีเมลสำหรับกู้คืนรหัสผ่าน (Recovery Email)</span>
+                </label>
+                <input
+                  type="email"
+                  value={secEmail}
+                  onChange={(e) => setSecEmail(e.target.value)}
+                  placeholder="เช่น mai2000@gmail.com"
+                  className="w-full text-xs bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-amber-500 text-slate-800"
+                  required
+                />
+                <p className="text-[10px] text-slate-400 mt-1">อีเมลสำหรับรับรหัส OTP กู้คืนรหัสผ่าน</p>
+              </div>
+
+              {/* Emergency PIN */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-orange-600" />
+                  <span>รหัส PIN ฉุกเฉินประจำตัว (Security PIN)</span>
+                </label>
+                <input
+                  type="text"
+                  value={secPin}
+                  onChange={(e) => setSecPin(e.target.value)}
+                  placeholder="รหัส 4-6 หลัก เช่น 2000"
+                  className="w-full text-xs bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-amber-500 font-mono tracking-wider text-slate-800"
+                  required
+                  maxLength={8}
+                />
+                <p className="text-[10px] text-slate-400 mt-1">รหัส PIN ฉุกเฉินสำหรับยืนยันสิทธิ์ผู้ควบคุมระบบ</p>
+              </div>
             </div>
           </div>
 
-          {/* Cover image */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-slate-700">รูปหน้าปกเว็บไซต์ (แสดงในหน้าล็อกอิน)</label>
-            <div className="flex items-center gap-4">
-              {coverPreview && (
-                <img src={coverPreview} alt="cover" className="w-32 h-16 rounded-xl object-cover border border-slate-300 shadow-sm" />
-              )}
-              <label className="cursor-pointer flex items-center gap-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition">
-                <Upload className="w-4 h-4" />
-                <span>อัพโหลดรูปหน้าปก</span>
+          {/* ========================================================= */}
+          {/* 4. MASTER PASSWORD CHANGE (OPTIONAL) */}
+          {/* ========================================================= */}
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Lock className="w-4 h-4 text-orange-600" />
+                <span>4. เปลี่ยนรหัสผ่านผู้ควบคุมระบบ (Master Password)</span>
+              </h3>
+              <span className="text-[11px] text-slate-500">(เว้นว่างไว้หากไม่ต้องการเปลี่ยนรหัสผ่าน)</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  รหัสผ่านปัจจุบัน หรือ PIN:
+                </label>
                 <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => {
-                    const f = e.target.files[0];
-                    if (f) {
-                      setCoverImageFile(f);
-                      setCoverPreview(URL.createObjectURL(f));
-                    }
-                  }}
+                  type={secShowPasswords ? 'text' : 'password'}
+                  value={secCurrentPassword}
+                  onChange={(e) => setSecCurrentPassword(e.target.value)}
+                  placeholder="กรอกรหัสเดิมเพื่อยืนยัน..."
+                  className="w-full text-xs bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-amber-500 font-mono text-slate-800"
                 />
-              </label>
-              {coverPreview && (
-                <button
-                  onClick={() => { setCoverImageFile(null); setCoverPreview(''); }}
-                  className="text-xs text-red-500 hover:text-red-700"
-                >ลบรูป</button>
-              )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร):
+                </label>
+                <input
+                  type={secShowPasswords ? 'text' : 'password'}
+                  value={secNewPassword}
+                  onChange={(e) => setSecNewPassword(e.target.value)}
+                  placeholder="ตั้งรหัสผ่านใหม่..."
+                  className="w-full text-xs bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-amber-500 font-mono text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  ยืนยันรหัสผ่านใหม่อีกครั้ง:
+                </label>
+                <input
+                  type={secShowPasswords ? 'text' : 'password'}
+                  value={secConfirmPassword}
+                  onChange={(e) => setSecConfirmPassword(e.target.value)}
+                  placeholder="ยืนยันรหัสใหม่อีกครั้ง..."
+                  className="w-full text-xs bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-amber-500 font-mono text-slate-800"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => setSecShowPasswords(!secShowPasswords)}
+                className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1.5"
+              >
+                {secShowPasswords ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                <span>{secShowPasswords ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}</span>
+              </button>
             </div>
           </div>
 
-          {/* Save */}
-          <div className="pt-2">
+          {/* ========================================================= */}
+          {/* 5. ANTI-HACK STATUS & UNLOCK CONTROLS */}
+          {/* ========================================================= */}
+          <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200/80 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-sm font-bold text-slate-800">
+                  5. สถานะระบบป้องกันการแฮก (Anti-Brute Force Protection)
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-100/90 px-3 py-1 rounded-full border border-emerald-300 flex items-center gap-1.5 shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>เปิดใช้งานตลอด 24 ชม.</span>
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              🛡️ <b>กฎความปลอดภัย:</b> หากมีการป้อนรหัสผ่านผิดเกิน <b>5 ครั้ง</b> ระบบจะระงับการเข้าสู่ระบบชั่วคราวเป็นเวลา <b>15 นาที</b> ทันที เพื่อป้องกันการสุ่มเดารหัสผ่าน ผู้ควบคุมระบบสามารถปลดล็อกได้ทันทีโดยการกู้คืนด้วย OTP หรือกดปุ่มด้านล่าง
+            </p>
+
+            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-amber-200/60">
+              <span className="text-xs text-slate-500">
+                กรณีมีผู้ใช้หรือผู้ควบคุมระบบเผลอกดรหัสผิดจนติดล็อก:
+              </span>
+              <button
+                type="button"
+                onClick={handleUnlockAll}
+                className="py-1.5 px-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-amber-600" />
+                <span>ปลดล็อกการระงับบัญชีทั้งหมด</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ========================================================= */}
+          {/* SUBMIT BUTTON */}
+          {/* ========================================================= */}
+          <div className="pt-2 flex justify-end">
             <button
-              onClick={() => {
-                onSaveBranding({
-                  siteTitle: siteTitleInput,
-                  profileImageFile,
-                  profileImageUrl: profileImageFile ? undefined : profilePreview,
-                  coverImageFile,
-                  coverImageUrl: coverImageFile ? undefined : coverPreview,
-                });
-                showSaved('บันทึกการตั้งค่าเว็บไซต์เรียบร้อย');
-                setProfileImageFile(null);
-                setCoverImageFile(null);
-              }}
-              className="bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold py-2.5 px-5 rounded-lg shadow-md shadow-orange-600/20 transition flex items-center gap-2"
+              type="button"
+              onClick={handleSaveAllBrandingAndSecurity}
+              disabled={secLoading}
+              className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold text-xs py-3 px-6 rounded-xl shadow-lg shadow-orange-600/30 transition flex items-center gap-2 disabled:opacity-50"
             >
-              <Save className="w-4 h-4" />
-              บันทึกการตั้งค่าเว็บไซต์
+              {secLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>กำลังบันทึกข้อมูลทั้งหมด...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกการตั้งค่าเว็บไซต์และผูกบัญชีทั้งหมด</span>
+                </>
+              )}
             </button>
           </div>
+
         </div>
       )}
 

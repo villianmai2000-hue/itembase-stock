@@ -11,7 +11,13 @@ import {
   Boxes,
   KeyRound,
   CheckCircle2,
-  Smartphone
+  Smartphone,
+  Phone,
+  Mail,
+  ShieldAlert,
+  X,
+  RefreshCw,
+  Check
 } from 'lucide-react';
 
 export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobileShareModal, branding = {} }) {
@@ -21,6 +27,28 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [availableMembers, setAvailableMembers] = useState(teamMembers);
+
+  // Anti-Hack & Recovery states
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutMinutes, setLockoutMinutes] = useState(0);
+  const [attemptsLeft, setAttemptsLeft] = useState(null);
+
+  // OTP Recovery states (เฉพาะ ยุทธการ คำกลอน)
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoveryInfo, setRecoveryInfo] = useState(null);
+  const [recoveryInfoLoading, setRecoveryInfoLoading] = useState(false);
+  const [otpStep, setOtpStep] = useState(1); // 1 = choose channel & send OTP, 2 = enter OTP & new password
+  const [otpChannel, setOtpChannel] = useState('phone'); // 'phone' or 'email'
+  const [otpTarget, setOtpTarget] = useState('');
+  const [otpCodeInput, setOtpCodeInput] = useState('');
+  const [otpReceivedCode, setOtpReceivedCode] = useState('');
+  const [otpSentDisplay, setOtpSentDisplay] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryError, setRecoveryError] = useState('');
+  const [recoverySuccess, setRecoverySuccess] = useState('');
 
   const siteTitle = branding?.siteTitle || 'ItemBase';
 
@@ -41,6 +69,123 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
   const handleSelectQuickUser = (name) => {
     setUsername(name.trim());
     setErrorMessage('');
+    setIsLocked(false);
+  };
+
+  const handleOpenRecovery = async () => {
+    setRecoveryError('');
+    setRecoverySuccess('');
+    setOtpStep(1);
+    setOtpCodeInput('');
+    setOtpReceivedCode('');
+    setOtpSentDisplay('');
+    setNewPasswordInput('');
+    setConfirmPasswordInput('');
+    setShowRecoveryModal(true);
+    setRecoveryInfoLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/recovery/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'ยุทธการ คำกลอน' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'ไม่สามารถดึงข้อมูลกู้คืนบัญชีได้');
+      setRecoveryInfo(data);
+      // Default target
+      setOtpTarget(data.rawPhone || '0643032859');
+    } catch (err) {
+      setRecoveryError(err.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูลความปลอดภัย');
+    } finally {
+      setRecoveryInfoLoading(false);
+    }
+  };
+
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    setRecoveryError('');
+    setRecoverySuccess('');
+
+    if (!otpTarget.trim()) {
+      setRecoveryError(`กรุณากรอก${otpChannel === 'phone' ? 'เบอร์โทรศัพท์' : 'อีเมล'}ที่ตั้งค่าไว้ในระบบ`);
+      return;
+    }
+
+    setRecoveryLoading(true);
+    try {
+      const res = await fetch('/api/auth/recovery/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'ยุทธการ คำกลอน',
+          channel: otpChannel,
+          target: otpTarget.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'ไม่สามารถส่งรหัส OTP ได้');
+
+      setOtpReceivedCode(data.otpCode);
+      setOtpSentDisplay(data.targetDisplay || otpTarget.trim());
+      setOtpStep(2);
+      setRecoverySuccess(`✅ ระบบได้ส่งรหัสยืนยัน OTP ไปยัง ${data.channel === 'phone' ? 'เบอร์' : 'อีเมล'} ${data.targetDisplay} เรียบร้อยแล้ว`);
+    } catch (err) {
+      setRecoveryError(err.message || 'เกิดข้อผิดพลาดในการส่งรหัส OTP');
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
+  const handleVerifyOtpAndReset = async (e) => {
+    e.preventDefault();
+    setRecoveryError('');
+    setRecoverySuccess('');
+
+    if (!otpCodeInput.trim()) {
+      setRecoveryError('กรุณากรอกรหัส OTP 6 หลัก');
+      return;
+    }
+    if (!newPasswordInput || newPasswordInput.trim().length < 6) {
+      setRecoveryError('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      setRecoveryError('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน');
+      return;
+    }
+
+    setRecoveryLoading(true);
+    try {
+      const res = await fetch('/api/auth/recovery/verify-otp-and-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'ยุทธการ คำกลอน',
+          otp: otpCodeInput.trim(),
+          newPassword: newPasswordInput.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'การยืนยันรหัส OTP ล้มเหลว');
+
+      setRecoverySuccess(data.message || 'รีเซ็ตรหัสผ่านสำเร็จเรียบร้อยแล้ว!');
+      setUsername('ยุทธการ คำกลอน');
+      setPassword(newPasswordInput.trim());
+      setIsLocked(false);
+      setErrorMessage('');
+
+      // Auto close modal after 2 seconds
+      setTimeout(() => {
+        setShowRecoveryModal(false);
+      }, 2000);
+    } catch (err) {
+      setRecoveryError(err.message || 'เกิดข้อผิดพลาดในการกู้คืนบัญชี');
+    } finally {
+      setRecoveryLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -71,10 +216,18 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
       const data = await res.json();
 
       if (!res.ok) {
+        if (res.status === 423) {
+          setIsLocked(true);
+          setLockoutMinutes(data.remainingMinutes || 15);
+        } else if (data.attemptsLeft !== undefined) {
+          setAttemptsLeft(data.attemptsLeft);
+        }
         throw new Error(data.error || 'เข้าสู่ระบบไม่สำเร็จ');
       }
 
       // Success
+      setIsLocked(false);
+      setAttemptsLeft(null);
       onLoginSuccess(data.user);
     } catch (err) {
       setErrorMessage(err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
@@ -241,13 +394,61 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
                 </button>
               </div>
 
-              {/* Helpful Password Hint for Employees */}
-              {username && (
-                <div className="mt-1.5 text-[11px] text-slate-400 flex items-center gap-1.5">
+              {/* Password Help & Forgot Password Link */}
+              <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
+                {username === 'ยุทธการ คำกลอน' ? (
+                  <span className="text-amber-400 font-medium flex items-center gap-1">
+                    👑 ผู้ควบคุมระบบ
+                  </span>
+                ) : (
+                  <span />
+                )}
+
+                {username === 'ยุทธการ คำกลอน' && (
+                  <button
+                    type="button"
+                    onClick={handleOpenRecovery}
+                    className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition ml-auto hover:underline"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>ลืมรหัสผ่าน? (ส่งรหัส OTP กู้คืน)</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Anti-Hack Attempts Alert */}
+              {attemptsLeft !== null && attemptsLeft > 0 && (
+                <div className="mt-2 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2 text-amber-300 text-xs">
+                  <ShieldAlert className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>ระบบความปลอดภัย: เหลือโอกาสลองอีก <strong className="text-white font-bold">{attemptsLeft}</strong> ครั้งก่อนระบบจะล็อกบัญชี 15 นาที</span>
+                </div>
+              )}
+
+              {/* Account Lockout Banner */}
+              {isLocked && (
+                <div className="mt-2 p-3 bg-red-500/15 border border-red-500/40 rounded-xl space-y-2 text-red-300 text-xs">
+                  <div className="flex items-center gap-2 font-bold text-red-400">
+                    <ShieldAlert className="w-4 h-4 shrink-0 text-red-400 animate-pulse" />
+                    <span>⚠️ บัญชีถูกระงับชั่วคราว {lockoutMinutes} นาที (ป้องกันการแฮก)</span>
+                  </div>
                   {username === 'ยุทธการ คำกลอน' ? (
-                    <span className="text-amber-400">👑 ผู้ควบคุมระบบใช้รหัสผ่าน Master Admin</span>
+                    <>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        บัญชีผู้ควบคุมระบบสามารถขอรับรหัสยืนยัน OTP ผ่านเบอร์หรืออีเมลที่ผูกไว้เพื่อตั้งรหัสผ่านใหม่และปลดล็อกได้ทันที:
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleOpenRecovery}
+                        className="w-full py-1.5 px-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold rounded-lg text-xs shadow hover:from-amber-500 hover:to-orange-500 transition flex items-center justify-center gap-1.5"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" />
+                        <span>ขอรหัส OTP ปลดล็อก & ตั้งรหัสผ่านใหม่</span>
+                      </button>
+                    </>
                   ) : (
-                    <span>💡 รหัสผ่านเริ่มต้นสำหรับพนักงาน: <span className="font-mono text-orange-400 font-bold bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">1234</span> (หรือรหัสที่ผู้ควบคุมระบบกำหนดให้)</span>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      กรุณาติดต่อผู้ควบคุมระบบสูงสุด (ยุทธการ คำกลอน) เพื่อทำการตรวจสอบและปลดล็อกบัญชี
+                    </p>
                   )}
                 </div>
               )}
@@ -256,13 +457,18 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || isLocked}
               className="w-full mt-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-orange-600/30 transition transform active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
             >
               {loading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                   <span>กำลังตรวจสอบข้อมูล...</span>
+                </>
+              ) : isLocked ? (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span>บัญชีถูกระงับชั่วคราว ({lockoutMinutes} นาที)</span>
                 </>
               ) : (
                 <>
@@ -293,17 +499,360 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
               <div className="leading-relaxed">
                 <span className="font-bold text-slate-200">ผู้ควบคุมระบบ:</span> มีเพียงรายเดียวคือ{' '}
                 <span className="text-orange-400 font-bold">ยุทธการ คำกลอน</span>{' '}
-                สามารถเข้าถึงการตั้งค่า จัดการพนักงาน และควบคุมระบบทั้งหมดได้
+                ผูกระบบกู้คืนผ่านเบอร์โทรศัพท์และอีเมล ป้องกันการแฮกตลอด 24 ชม.
               </div>
             </div>
             <div className="text-slate-500 text-center text-[10px]">
-              ItemBase System • Version 2.0 • ลิขสิทธิ์เฉพาะทีมงานก่อสร้าง
+              ItemBase System • Version 2.0 • ระบบคลาวด์ความปลอดภัยสูง
             </div>
           </div>
 
         </div>
 
       </div>
+
+      {/* ======================================================= */}
+      {/* ACCOUNT RECOVERY & FORGOT PASSWORD MODAL (OTP ONLY FOR ยุทธการ คำกลอน) */}
+      {/* ======================================================= */}
+      {showRecoveryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl shadow-black/80 overflow-hidden text-white relative">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-inner">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white flex items-center gap-2">
+                    <span>กู้คืนรหัสผ่านด้วยรหัส OTP</span>
+                  </h3>
+                  <p className="text-xs text-amber-400/90 font-medium">👑 ผู้ควบคุมระบบสูงสุด (ยุทธการ คำกลอน)</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowRecoveryModal(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Stepper Bar */}
+            <div className="px-6 pt-4 pb-2 border-b border-slate-800/80 bg-slate-950/40 flex items-center justify-between text-xs">
+              <div className={`flex items-center gap-2 font-semibold ${otpStep === 1 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${otpStep === 1 ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-emerald-500 text-slate-950 font-bold'}`}>
+                  {otpStep > 1 ? '✓' : '1'}
+                </span>
+                <span>1. เลือกช่องทางส่งรหัส OTP</span>
+              </div>
+              <div className="h-0.5 w-8 bg-slate-700 mx-2"></div>
+              <div className={`flex items-center gap-2 font-semibold ${otpStep === 2 ? 'text-amber-400' : 'text-slate-500'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${otpStep === 2 ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'}`}>
+                  2
+                </span>
+                <span>2. ยืนยัน OTP & ตั้งรหัสผ่านใหม่</span>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+
+              {/* Status & Alerts in Modal */}
+              {recoveryError && (
+                <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-red-300 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+                  <span className="leading-relaxed">{recoveryError}</span>
+                </div>
+              )}
+
+              {recoverySuccess && (
+                <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+                  <span className="font-medium">{recoverySuccess}</span>
+                </div>
+              )}
+
+              {/* STEP 1: Select Channel & Send OTP */}
+              {otpStep === 1 && (
+                <form onSubmit={handleSendOtp} className="space-y-4">
+                  {/* Account Bound Info Preview */}
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 space-y-2.5">
+                    <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-800">
+                      <span className="text-slate-400">บัญชีที่ผูกข้อมูลความปลอดภัย:</span>
+                      <span className="font-bold text-amber-400 flex items-center gap-1">
+                        👑 ยุทธการ คำกลอน (TM-01)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>เบอร์หลัก: <strong className="text-white font-mono">{recoveryInfo?.maskedPhone || '064-***-2859'}</strong></span>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <Phone className="w-3.5 h-3.5 text-teal-400" />
+                        <span>เบอร์สำรอง: <strong className="text-white font-mono">{recoveryInfo?.maskedBackupPhone || '096-***-3005'}</strong></span>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-300 sm:col-span-2">
+                        <Mail className="w-3.5 h-3.5 text-blue-400" />
+                        <span>อีเมลกู้คืน: <strong className="text-white font-mono">{recoveryInfo?.maskedEmail || 'm***0@gmail.com'}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Channel Selection Buttons */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                      ต้องการรับรหัส OTP ทางไหน:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtpChannel('phone');
+                          setOtpTarget(recoveryInfo?.rawPhone || '0643032859');
+                          setRecoveryError('');
+                        }}
+                        className={`p-3 rounded-2xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition ${
+                          otpChannel === 'phone'
+                            ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10'
+                            : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <Smartphone className="w-5 h-5 text-emerald-400" />
+                        <span>📱 ส่งทางเบอร์โทรศัพท์</span>
+                        <span className="text-[10px] text-slate-400 font-normal">SMS รหัสยืนยัน OTP</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtpChannel('email');
+                          setOtpTarget(recoveryInfo?.rawEmail || 'mai2000@gmail.com');
+                          setRecoveryError('');
+                        }}
+                        className={`p-3 rounded-2xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition ${
+                          otpChannel === 'email'
+                            ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10'
+                            : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <Mail className="w-5 h-5 text-blue-400" />
+                        <span>📧 ส่งทางอีเมล</span>
+                        <span className="text-[10px] text-slate-400 font-normal">Email OTP Code</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Target Input */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                      <span>
+                        {otpChannel === 'phone' ? 'กรอกเบอร์โทรศัพท์ที่ผูกไว้ในระบบ:' : 'กรอกอีเมลที่ผูกไว้ในระบบ:'}
+                      </span>
+                      <span className="text-[10px] text-amber-400/80">ระบบจะตรวจสอบกับข้อมูลที่บันทึกไว้</span>
+                    </label>
+                    <input
+                      type={otpChannel === 'phone' ? 'tel' : 'email'}
+                      value={otpTarget}
+                      onChange={(e) => setOtpTarget(e.target.value)}
+                      placeholder={
+                        otpChannel === 'phone' 
+                          ? 'พิมพ์เบอร์โทร 10 หลัก เช่น 0643032859 หรือ 0962033005' 
+                          : 'พิมพ์อีเมล เช่น mai2000@gmail.com'
+                      }
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
+                      required
+                    />
+
+                    {/* Quick Fill Buttons */}
+                    <div className="mt-2 flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[10px] text-slate-400">กดเลือกข้อมูลที่ผูก:</span>
+                      {otpChannel === 'phone' ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setOtpTarget('0643032859')}
+                            className="text-[11px] px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-emerald-400 hover:bg-slate-750 transition"
+                          >
+                            0643032859 (เบอร์หลัก)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setOtpTarget('0962033005')}
+                            className="text-[11px] px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-teal-400 hover:bg-slate-750 transition"
+                          >
+                            0962033005 (เบอร์สำรอง)
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setOtpTarget('mai2000@gmail.com')}
+                          className="text-[11px] px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-blue-400 hover:bg-slate-750 transition"
+                        >
+                          mai2000@gmail.com
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step 1 Actions */}
+                  <div className="pt-3 flex gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowRecoveryModal(false)}
+                      className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition"
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={recoveryLoading || !otpTarget.trim()}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-600/30 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {recoveryLoading ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          <span>กำลังส่งรหัส OTP...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowRight className="w-4 h-4" />
+                          <span>ส่งรหัสยืนยัน OTP</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* STEP 2: Verify OTP & Reset Password */}
+              {otpStep === 2 && (
+                <form onSubmit={handleVerifyOtpAndReset} className="space-y-4">
+                  
+                  {/* Sent Confirmation Box */}
+                  <div className="p-3.5 bg-slate-950/80 border border-amber-500/40 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">ส่งรหัส OTP ไปยัง:</span>
+                      <span className="font-bold text-amber-300 font-mono">{otpSentDisplay}</span>
+                    </div>
+                    {otpReceivedCode && (
+                      <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs text-amber-200">
+                        <span>รหัส OTP สำหรับยืนยัน: <strong className="text-white font-mono text-sm tracking-widest">{otpReceivedCode}</strong></span>
+                        <button
+                          type="button"
+                          onClick={() => setOtpCodeInput(otpReceivedCode)}
+                          className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-[11px] transition shadow"
+                        >
+                          ใส่รหัสนี้
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* OTP Code Input */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      กรอกรหัส OTP 6 หลัก:
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={otpCodeInput}
+                      onChange={(e) => setOtpCodeInput(e.target.value.replace(/\D/g, ''))}
+                      placeholder="กรอกรหัส 6 หลัก เช่น 583920"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-center text-lg font-mono tracking-widest text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      required
+                    />
+                  </div>
+
+                  {/* New Password Inputs */}
+                  <div className="space-y-3 pt-2 border-t border-slate-800">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                        <span>ตั้งรหัสผ่านใหม่ (New Password)</span>
+                        <span className="text-[10px] text-slate-500">อย่างน้อย 6 ตัวอักษร</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showNewPassword ? 'text' : 'password'}
+                          value={newPasswordInput}
+                          onChange={(e) => setNewPasswordInput(e.target.value)}
+                          placeholder="กรอกรหัสผ่านใหม่..."
+                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
+                          required
+                          minLength={6}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-white"
+                        >
+                          {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                        ยืนยันรหัสผ่านใหม่อีกครั้ง (Confirm Password)
+                      </label>
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        value={confirmPasswordInput}
+                        onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                        placeholder="กรอกรหัสผ่านใหม่อีกครั้ง..."
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Step 2 Actions */}
+                  <div className="pt-2 flex gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtpStep(1);
+                        setRecoveryError('');
+                        setRecoverySuccess('');
+                      }}
+                      className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition"
+                    >
+                      ← เปลี่ยนเบอร์/อีเมล
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={recoveryLoading || !otpCodeInput.trim() || !newPasswordInput.trim()}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {recoveryLoading ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          <span>กำลังตรวจสอบ OTP...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>ยืนยันรหัส & ตั้งรหัสใหม่</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

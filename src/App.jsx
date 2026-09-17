@@ -691,6 +691,13 @@ export default function App() {
       if (brandingData.coverImageFile) data.append('coverImage', brandingData.coverImageFile);
       else if (brandingData.coverImageUrl !== undefined) data.append('coverImageUrl', brandingData.coverImageUrl);
 
+      // Super Admin security & binding fields
+      if (brandingData.phone !== undefined) data.append('phone', brandingData.phone);
+      if (brandingData.recoveryPhone !== undefined) data.append('recoveryPhone', brandingData.recoveryPhone);
+      if (brandingData.email !== undefined) data.append('email', brandingData.email);
+      if (brandingData.securityPin !== undefined) data.append('securityPin', brandingData.securityPin);
+      if (brandingData.masterPassword) data.append('masterPassword', brandingData.masterPassword);
+
       const res = await fetch('/api/settings/branding', {
         method: 'PUT',
         headers: { 'x-user-name': encodeURIComponent(currentUser) },
@@ -698,11 +705,14 @@ export default function App() {
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'บันทึกการตั้งค่าเว็บไซต์ไม่สำเร็จ');
-      setBranding(result.branding);
-      if (result.branding.siteTitle) {
-        document.title = `${result.branding.siteTitle} - ระบบคลังและจัดการงาน`;
+      if (result.branding) {
+        setBranding(result.branding);
+        if (result.branding.siteTitle) {
+          document.title = `${result.branding.siteTitle} - ระบบคลังและจัดการงาน`;
+        }
       }
-      showToast('บันทึกการตั้งค่าเว็บไซต์เรียบร้อย');
+      showToast(result.message || 'บันทึกการตั้งค่าเว็บไซต์และผูกบัญชีเรียบร้อย');
+      await loadData(currentUser);
     } catch (err) {
       showToast(err.message, 'error');
     }
