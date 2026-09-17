@@ -46,6 +46,7 @@ export default function App() {
   const [locations, setLocations] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [serverOnline, setServerOnline] = useState(true);
   const [dbStatus, setDbStatus] = useState({ isCloud: false, persistent: false, mode: 'local_file' });
   const [restoreCandidate, setRestoreCandidate] = useState(null);
@@ -113,10 +114,12 @@ export default function App() {
     showToast('ออกจากระบบเรียบร้อยแล้ว');
   };
 
-  // Fetch initial data
-  const loadData = async (activeUserName) => {
+  // Fetch initial or background data
+  const loadData = async (activeUserName, forceShowSpinner = false) => {
     try {
-      setLoading(true);
+      if (!hasLoadedOnce || forceShowSpinner) {
+        setLoading(true);
+      }
       const reqHeaders = {};
       const uName = activeUserName || (authUser ? authUser.name : currentUser);
       if (uName) {
@@ -195,6 +198,7 @@ export default function App() {
       showToast('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง', 'error');
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   };
 
