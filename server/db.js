@@ -18,8 +18,23 @@ let mongoCollection = null;
 let isMongoConnected = false;
 let mongoConnectingPromise = null;
 
-let currentMongoUri = process.env.MONGODB_URI || '';
-export const getMongoUri = () => (process.env.MONGODB_URI || currentMongoUri || '').trim();
+export const DEFAULT_MONGO_URI = 'mongodb+srv://itembase_admin:0962033005Maiiam2000@cluster0.otyldzl.mongodb.net/?appName=Cluster0';
+
+export function sanitizeMongoUri(rawUri) {
+  if (!rawUri || typeof rawUri !== 'string') return DEFAULT_MONGO_URI;
+  let uri = rawUri.trim();
+  if (!uri) return DEFAULT_MONGO_URI;
+  if (uri.includes('<db_password>') || uri.includes('%3Cdb_password%3E') || uri.includes('<password>')) {
+    uri = uri
+      .replace('<db_password>', '0962033005Maiiam2000')
+      .replace('%3Cdb_password%3E', '0962033005Maiiam2000')
+      .replace('<password>', '0962033005Maiiam2000');
+  }
+  return uri;
+}
+
+let currentMongoUri = sanitizeMongoUri(process.env.MONGODB_URI);
+export const getMongoUri = () => sanitizeMongoUri(process.env.MONGODB_URI || currentMongoUri);
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN ? process.env.GITHUB_TOKEN.trim() : null;
 const GITHUB_REPO = process.env.GITHUB_REPO ? process.env.GITHUB_REPO.trim() : 'villianmai2000-hue/itembase-stock';
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH ? process.env.GITHUB_BRANCH.trim() : 'data';
@@ -420,10 +435,20 @@ export async function connectMongo() {
     try {
       console.log('[MongoDB] กำลังเชื่อมต่อกับ MongoDB Atlas Cloud Database:', maskMongoUri(uri));
       mongoClient = new MongoClient(uri, {
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 10000
+        serverSelectionTimeoutMS: 8000,
+        connectTimeoutMS: 12000
       });
       await mongoClient.connect();
+      mongoClient.on('close', () => {
+        console.warn('[MongoDB Atlas] การเชื่อมต่อถูกปิด กำลังเตรียมเชื่อมต่อใหม่เมื่อมีคำขอ');
+        isMongoConnected = false;
+        mongoCollection = null;
+      });
+      mongoClient.on('error', (err) => {
+        console.warn('[MongoDB Atlas] ข้อผิดพลาดการเชื่อมต่อ:', err?.message);
+        isMongoConnected = false;
+        mongoCollection = null;
+      });
       const dbName = process.env.MONGODB_DB || 'itembase';
       const db = mongoClient.db(dbName);
       mongoCollection = db.collection('store');
@@ -588,10 +613,10 @@ export async function resetDatabase() {
 
 // Connect to MongoDB Atlas with dynamic URI, test, and persist to .env
 export async function updateMongoConnection(newUri, dbName = 'itembase') {
-  if (!newUri || !newUri.trim()) {
+  const cleanUri = sanitizeMongoUri(newUri);
+  if (!cleanUri) {
     throw new Error('กรุณาระบุ MongoDB Connection String (ขึ้นต้นด้วย mongodb+srv:// หรือ mongodb://)');
   }
-  const cleanUri = newUri.trim();
   const targetDb = (dbName || 'itembase').trim();
 
   console.log('[MongoDB Atlas] กำลังทดสอบและเชื่อมต่อกับ:', maskMongoUri(cleanUri));

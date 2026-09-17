@@ -414,7 +414,7 @@ export default function TaskBoard({
                                     className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-300"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setBoardImagePreview(activeImage);
+                                      setBoardImagePreview({ images: imageFiles, index: safeIdx });
                                     }}
                                   />
 
@@ -430,7 +430,7 @@ export default function TaskBoard({
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setBoardImagePreview(activeImage);
+                                      setBoardImagePreview({ images: imageFiles, index: safeIdx });
                                     }}
                                     className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-lg text-white backdrop-blur-md border border-white/20 transition opacity-0 group-hover/slider:opacity-100"
                                     title="ดูภาพขยายเต็มจอ"
@@ -960,7 +960,8 @@ export default function TaskBoard({
       {/* Lightbox Modal for Images on Board */}
       <ImageLightboxModal
         isOpen={!!boardImagePreview}
-        image={boardImagePreview}
+        images={boardImagePreview?.images || (boardImagePreview?.url ? [boardImagePreview] : [])}
+        currentIndex={boardImagePreview?.index || 0}
         onClose={() => setBoardImagePreview(null)}
       />
 

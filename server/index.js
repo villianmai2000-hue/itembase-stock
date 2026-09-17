@@ -62,10 +62,7 @@ app.post('/api/github/sync', async (req, res) => {
 app.post('/api/mongodb/connect', async (req, res) => {
   try {
     const { uri, dbName } = req.body;
-    if (!uri || !uri.trim()) {
-      return res.status(400).json({ error: 'กรุณากรอก MongoDB Connection String (เช่น mongodb+srv://...)' });
-    }
-    const result = await updateMongoConnection(uri.trim(), dbName);
+    const result = await updateMongoConnection(uri || '', dbName);
     res.json({
       success: true,
       message: '✅ เชื่อมต่อ MongoDB Atlas สำเร็จ! ฐานข้อมูลคลาวด์ออนไลน์ตลอด 24 ชม.',

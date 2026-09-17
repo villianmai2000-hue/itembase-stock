@@ -149,11 +149,19 @@ export default function SettingsPage({
     } catch {}
   };
 
-  const handleConnectMongo = async (e) => {
+  const handleConnectMongo = async (e, directUri) => {
     if (e && e.preventDefault) e.preventDefault();
-    if (!mongoUriInput || !mongoUriInput.trim()) {
+    const uriToUse = directUri || mongoUriInput;
+    if (!uriToUse || !uriToUse.trim()) {
       setMongoMessage({ type: 'error', text: 'กรุณากรอก MongoDB Connection String (เช่น mongodb+srv://...)' });
       return;
+    }
+    let sanitized = uriToUse.trim();
+    if (sanitized.includes('<db_password>') || sanitized.includes('%3Cdb_password%3E') || sanitized.includes('<password>')) {
+      sanitized = sanitized
+        .replace('<db_password>', '0962033005Maiiam2000')
+        .replace('%3Cdb_password%3E', '0962033005Maiiam2000')
+        .replace('<password>', '0962033005Maiiam2000');
     }
     setIsConnectingMongo(true);
     setMongoMessage(null);
@@ -162,7 +170,7 @@ export default function SettingsPage({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          uri: mongoUriInput.trim(),
+          uri: sanitized,
           dbName: mongoDbNameInput.trim() || 'itembase'
         })
       });
@@ -1139,10 +1147,33 @@ export default function SettingsPage({
                     <input
                       type="text"
                       value={mongoUriInput}
-                      onChange={(e) => setMongoUriInput(e.target.value)}
-                      placeholder="mongodb+srv://<username>:<password>@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority"
+                      onChange={(e) => {
+                        let val = e.target.value;
+                        if (val.includes('<db_password>') && val.includes('itembase_admin')) {
+                          val = val.replace('<db_password>', '0962033005Maiiam2000');
+                        }
+                        setMongoUriInput(val);
+                      }}
+                      placeholder="mongodb+srv://itembase_admin:0962033005Maiiam2000@cluster0.otyldzl.mongodb.net/?appName=Cluster0"
                       className="w-full text-xs bg-slate-800/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-emerald-300 font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none placeholder:text-slate-500"
                     />
+
+                    {/* Quick 1-Click Connect Button for user's Cluster0 */}
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const autoUri = 'mongodb+srv://itembase_admin:0962033005Maiiam2000@cluster0.otyldzl.mongodb.net/?appName=Cluster0';
+                          setMongoUriInput(autoUri);
+                          handleConnectMongo(null, autoUri);
+                        }}
+                        disabled={isConnectingMongo}
+                        className="w-full py-2 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-2 transition active:scale-95 disabled:opacity-50"
+                      >
+                        <span>🍃</span>
+                        <span>คลิกเดียวเพื่อเชื่อมต่อ MongoDB Atlas ของระบบทันที (Cluster0 พร้อมรหัสผ่านเรียบร้อย)</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

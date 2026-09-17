@@ -355,7 +355,7 @@ export default function TaskModal({
                           src={activeImg.url}
                           alt={activeImg.name}
                           className="w-full h-full object-contain cursor-pointer transition-transform duration-200"
-                          onClick={() => setPreviewImage(activeImg)}
+                          onClick={() => setPreviewImage({ images: imageFiles, index: safeIdx })}
                         />
 
                         {/* Top Controls Bar */}
@@ -366,7 +366,7 @@ export default function TaskModal({
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => setPreviewImage(activeImg)}
+                              onClick={() => setPreviewImage({ images: imageFiles, index: safeIdx })}
                               className="px-2.5 py-1 bg-black/60 hover:bg-black/80 rounded-lg text-white text-xs backdrop-blur-md border border-white/20 flex items-center gap-1 transition shadow"
                               title="ขยายดูภาพขนาดเต็ม"
                             >
@@ -605,7 +605,8 @@ export default function TaskModal({
       {/* Lightbox Modal for Images */}
       <ImageLightboxModal
         isOpen={!!previewImage}
-        image={previewImage}
+        images={previewImage?.images || (previewImage?.url ? [previewImage] : [])}
+        currentIndex={previewImage?.index || 0}
         onClose={() => setPreviewImage(null)}
       />
 
