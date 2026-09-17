@@ -27,6 +27,9 @@ export default function SettingsPage({
   locations = [], 
   categories = [], 
   onSaveMembers, 
+  onAddMember,
+  onUpdateMember,
+  onDeleteMember,
   onSaveLocations, 
   onSaveCategories,
   onResetData,
@@ -125,7 +128,7 @@ export default function SettingsPage({
   };
 
   // --- Members handlers ---
-  const handleAddMember = (e) => {
+  const handleAddMember = async (e) => {
     e.preventDefault();
     if (!newMemberName.trim()) return;
     const cleanName = newMemberName.replace(/\s+/g, ' ').trim();
@@ -133,6 +136,26 @@ export default function SettingsPage({
       alert(`มีรายชื่อ "${cleanName}" อยู่ในระบบแล้ว`);
       return;
     }
+
+    if (onAddMember) {
+      try {
+        await onAddMember({
+          name: cleanName,
+          role: newMemberRole.trim() || 'ช่างหน้างาน',
+          phone: newMemberPhone.trim() || '-',
+          password: newMemberPassword.trim() || '1234'
+        });
+        setNewMemberName('');
+        setNewMemberRole('');
+        setNewMemberPhone('');
+        setNewMemberPassword('1234');
+        showSaved('เพิ่มสมาชิกใหม่ในองค์กรเรียบร้อยแล้ว');
+      } catch (err) {
+        // error toast already triggered
+      }
+      return;
+    }
+
     const maxIdNum = membersList.reduce((max, m) => {
       const num = parseInt((m.id || '').replace(/\D/g, ''), 10);
       return !isNaN(num) && num > max ? num : max;
@@ -151,7 +174,7 @@ export default function SettingsPage({
       }
     ];
     setMembersList(updated);
-    onSaveMembers(updated);
+    if (onSaveMembers) onSaveMembers(updated);
     setNewMemberName('');
     setNewMemberRole('');
     setNewMemberPhone('');
@@ -167,18 +190,37 @@ export default function SettingsPage({
     setEditPassword(m.password || (m.id === 'TM-01' || m.name === 'ยุทธการ คำกลอน' ? '0962033005Maiiam2000' : '1234'));
   };
 
-  const handleSaveEditMember = (id) => {
+  const handleSaveEditMember = async (id) => {
     const cleanEditName = editName.replace(/\s+/g, ' ').trim();
     if (!cleanEditName) {
       alert('กรุณากรอกชื่อพนักงาน');
       return;
     }
+
+    const current = membersList.find(m => m.id === id);
+    const isSuper = id === 'TM-01' || (current && current.name === 'ยุทธการ คำกลอน');
+
+    if (onUpdateMember) {
+      try {
+        await onUpdateMember(id, {
+          name: isSuper ? 'ยุทธการ คำกลอน' : cleanEditName,
+          role: editRole.trim() || (current ? current.role : 'ช่างหน้างาน'),
+          phone: editPhone.trim() || (current ? current.phone : '-'),
+          password: isSuper ? '0962033005Maiiam2000' : (editPassword.trim() || (current ? current.password : '1234'))
+        });
+        setEditingMemberId(null);
+        showSaved('บันทึกการแก้ไขข้อมูลพนักงานและรหัสผ่านเรียบร้อย');
+      } catch (err) {
+        // error toast handled
+      }
+      return;
+    }
+
     const updated = membersList.map(m => {
       if (m.id === id) {
-        const isSuper = m.id === 'TM-01' || m.name === 'ยุทธการ คำกลอน';
         return {
           ...m,
-          name: cleanEditName,
+          name: isSuper ? 'ยุทธการ คำกลอน' : cleanEditName,
           role: editRole.trim() || 'ช่างหน้างาน',
           phone: editPhone.trim() || '-',
           password: isSuper ? '0962033005Maiiam2000' : (editPassword.trim() || m.password || '1234')
@@ -187,12 +229,12 @@ export default function SettingsPage({
       return m;
     });
     setMembersList(updated);
-    onSaveMembers(updated);
+    if (onSaveMembers) onSaveMembers(updated);
     setEditingMemberId(null);
     showSaved('บันทึกการแก้ไขข้อมูลพนักงานและรหัสผ่านเรียบร้อย');
   };
 
-  const handleDeleteMember = (id) => {
+  const handleDeleteMember = async (id) => {
     const target = membersList.find(m => m.id === id);
     if (target && (target.id === 'TM-01' || target.name === 'ยุทธการ คำกลอน')) {
       alert('ไม่สามารถลบผู้ควบคุมระบบหลัก ยุทธการ คำกลอน ได้');
@@ -203,9 +245,18 @@ export default function SettingsPage({
       return;
     }
     if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายชื่อ "${target?.name}" ออกจากระบบ?`)) {
+      if (onDeleteMember) {
+        try {
+          await onDeleteMember(id);
+          showSaved('ลบรายชื่อพนักงานเรียบร้อย');
+        } catch (err) {
+          // error toast handled
+        }
+        return;
+      }
       const updated = membersList.filter(m => m.id !== id);
       setMembersList(updated);
-      onSaveMembers(updated);
+      if (onSaveMembers) onSaveMembers(updated);
       showSaved('ลบรายชื่อพนักงานเรียบร้อย');
     }
   };

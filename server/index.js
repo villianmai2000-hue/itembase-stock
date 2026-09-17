@@ -900,7 +900,162 @@ app.get('/api/settings', (req, res) => {
   });
 });
 
-// Update team members
+// Add new team member
+app.post('/api/settings/members', (req, res) => {
+  const db = readDb();
+  const requester = getRequesterName(req);
+  if (normalizeName(requester) !== normalizeName('ยุทธการ คำกลอน')) {
+    return res.status(403).json({ error: 'สงวนสิทธิ์การตั้งค่าและเพิ่มสมาชิกเฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
+  }
+
+  const { name, role, phone, password } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'กรุณากรอกชื่อ-นามสกุลพนักงาน' });
+  }
+
+  const cleanName = name.replace(/\s+/g, ' ').trim();
+  const existing = (db.team_members || []).find(m => normalizeName(m.name) === normalizeName(cleanName));
+  if (existing) {
+    return res.status(400).json({ error: `มีรายชื่อ "${cleanName}" อยู่ในระบบแล้ว (${existing.id})` });
+  }
+
+  // Calculate guaranteed unique next ID by finding maximum numeric ID in DB
+  const maxIdNum = (db.team_members || []).reduce((max, m) => {
+    const num = parseInt((m.id || '').replace(/\D/g, ''), 10);
+    return !isNaN(num) && num > max ? num : max;
+  }, 0);
+  const newId = `TM-${(maxIdNum + 1).toString().padStart(2, '0')}`;
+
+  const isSuper = newId === 'TM-01' || normalizeName(cleanName) === normalizeName('ยุทธการ คำกลอน');
+  const newMember = {
+    id: newId,
+    name: cleanName,
+    role: (role || '').replace(/\s+/g, ' ').trim() || 'ช่างหน้างาน',
+    phone: (phone || '-').trim(),
+    password: isSuper ? '0962033005Maiiam2000' : ((password || '').trim() || '1234'),
+    isAdmin: isSuper,
+    status: 'active'
+  };
+
+  if (!Array.isArray(db.team_members)) {
+    db.team_members = [];
+  }
+  db.team_members.push(newMember);
+  saveDb(db);
+
+  res.status(201).json({
+    message: `เพิ่มสมาชิก "${cleanName}" (${newId}) เรียบร้อยแล้ว`,
+    member: newMember,
+    team_members: db.team_members
+  });
+});
+
+// Update single team member
+app.put('/api/settings/members/:id', (req, res) => {
+  const db = readDb();
+  const requester = getRequesterName(req);
+  if (normalizeName(requester) !== normalizeName('ยุทธการ คำกลอน')) {
+    return res.status(403).json({ error: 'สงวนสิทธิ์การแก้ไขสมาชิกเฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
+  }
+
+  const targetId = req.params.id;
+  const index = (db.team_members || []).findIndex(m => m.id.toLowerCase() === targetId.toLowerCase());
+  if (index === -1) {
+    return res.status(404).json({ error: 'ไม่พบข้อมูลพนักงานที่ต้องการแก้ไข' });
+  }
+
+  const current = db.team_members[index];
+  const { name, role, phone, password, status } = req.body;
+
+  const isSuper = current.id === 'TM-01' || normalizeName(current.name) === normalizeName('ยุทธการ คำกลอน');
+  const newCleanName = isSuper ? 'ยุทธการ คำกลอน' : ((name || current.name).replace(/\s+/g, ' ').trim());
+
+  if (!newCleanName) {
+    return res.status(400).json({ error: 'กรุณากรอกชื่อพนักงาน' });
+  }
+
+  // Check if renaming to someone else's name
+  if (normalizeName(newCleanName) !== normalizeName(current.name)) {
+    const duplicate = db.team_members.find((m, i) => i !== index && normalizeName(m.name) === normalizeName(newCleanName));
+    if (duplicate) {
+      return res.status(400).json({ error: `มีรายชื่อ "${newCleanName}" ซ้ำกับสมาชิกอื่นในระบบแล้ว (${duplicate.id})` });
+    }
+  }
+
+  const oldName = current.name;
+  let newPass = current.password || '1234';
+  if (isSuper) {
+    newPass = '0962033005Maiiam2000';
+  } else if (password !== undefined && password.trim()) {
+    newPass = password.trim();
+  }
+
+  const updatedMember = {
+    ...current,
+    name: newCleanName,
+    role: role !== undefined ? role.replace(/\s+/g, ' ').trim() : current.role,
+    phone: phone !== undefined ? phone.trim() : current.phone,
+    password: newPass,
+    status: status !== undefined ? status : current.status,
+    isAdmin: isSuper
+  };
+
+  db.team_members[index] = updatedMember;
+
+  // Cascade rename tasks
+  if (normalizeName(oldName) !== normalizeName(newCleanName) && Array.isArray(db.tasks)) {
+    for (const task of db.tasks) {
+      if (task.assignee && normalizeName(task.assignee) === normalizeName(oldName)) {
+        task.assignee = newCleanName;
+      }
+      if (task.createdBy && normalizeName(task.createdBy) === normalizeName(oldName)) {
+        task.createdBy = newCleanName;
+      }
+    }
+  }
+
+  saveDb(db);
+  res.json({
+    message: 'บันทึกการแก้ไขข้อมูลเรียบร้อยแล้ว',
+    member: updatedMember,
+    team_members: db.team_members
+  });
+});
+
+// Delete single team member
+app.delete('/api/settings/members/:id', (req, res) => {
+  const db = readDb();
+  const requester = getRequesterName(req);
+  if (normalizeName(requester) !== normalizeName('ยุทธการ คำกลอน')) {
+    return res.status(403).json({ error: 'สงวนสิทธิ์การลบสมาชิกเฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
+  }
+
+  const targetId = req.params.id;
+  const index = (db.team_members || []).findIndex(m => m.id.toLowerCase() === targetId.toLowerCase());
+  if (index === -1) {
+    return res.status(404).json({ error: 'ไม่พบข้อมูลพนักงานที่ต้องการลบ' });
+  }
+
+  const target = db.team_members[index];
+  if (target.id === 'TM-01' || normalizeName(target.name) === normalizeName('ยุทธการ คำกลอน')) {
+    return res.status(400).json({ error: 'ไม่สามารถลบผู้ควบคุมระบบหลัก ยุทธการ คำกลอน ได้' });
+  }
+
+  if (db.team_members.length <= 1) {
+    return res.status(400).json({ error: 'ต้องมีรายชื่อสมาชิกในองค์กรอย่างน้อย 1 คน' });
+  }
+
+  const removed = db.team_members.splice(index, 1)[0];
+  saveDb(db);
+
+  res.json({
+    message: `ลบรายชื่อ "${removed.name}" เรียบร้อยแล้ว`,
+    member: removed,
+    team_members: db.team_members
+  });
+});
+
+// Batch update team members (Sync fallback)
 app.put('/api/settings/members', (req, res) => {
   const db = readDb();
   const requester = getRequesterName(req);
@@ -909,8 +1064,8 @@ app.put('/api/settings/members', (req, res) => {
   }
 
   let { members } = req.body;
-  if (!Array.isArray(members)) {
-    return res.status(400).json({ error: 'รูปแบบข้อมูลไม่ถูกต้อง' });
+  if (!Array.isArray(members) || members.length === 0) {
+    return res.status(400).json({ error: 'รูปแบบข้อมูลไม่ถูกต้อง หรือไม่มีรายการข้อมูล' });
   }
 
   const oldMembers = db.team_members || [];
@@ -950,14 +1105,32 @@ app.put('/api/settings/members', (req, res) => {
     members[adminIndex].isAdmin = true;
   }
 
-  // Ensure all members have clean formatted names and preserve/set passwords
+  // Ensure all members have clean formatted names, guaranteed unique IDs, and preserve passwords
+  const seenIds = new Set(['TM-01']);
+  let maxIdNum = 10;
+  members.forEach(m => {
+    const num = parseInt((m.id || '').replace(/\D/g, ''), 10);
+    if (!isNaN(num) && num > maxIdNum) maxIdNum = num;
+  });
+
   members = members.map(m => {
     const cleanName = (m.name || '').replace(/\s+/g, ' ').trim();
     const isSuper = m.id === 'TM-01' || normalizeName(cleanName) === normalizeName('ยุทธการ คำกลอน');
 
+    let assignedId = m.id;
+    if (!assignedId || seenIds.has(assignedId)) {
+      if (!isSuper) {
+        maxIdNum++;
+        assignedId = `TM-${maxIdNum.toString().padStart(2, '0')}`;
+      } else {
+        assignedId = 'TM-01';
+      }
+    }
+    seenIds.add(assignedId);
+
     let pwd = (m.password || '').trim();
     if (!pwd) {
-      const existing = oldMembers.find(o => o.id === m.id || normalizeName(o.name) === normalizeName(cleanName));
+      const existing = oldMembers.find(o => o.id === assignedId || normalizeName(o.name) === normalizeName(cleanName));
       pwd = (existing && existing.password) ? existing.password : '1234';
     }
     if (isSuper) {
@@ -965,7 +1138,7 @@ app.put('/api/settings/members', (req, res) => {
     }
 
     return {
-      id: m.id,
+      id: assignedId,
       name: cleanName,
       role: (m.role || '').replace(/\s+/g, ' ').trim(),
       phone: (m.phone || '-').trim(),

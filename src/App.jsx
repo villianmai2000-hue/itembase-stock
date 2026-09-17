@@ -487,6 +487,86 @@ export default function App() {
   // SETTINGS ACTIONS
   // ------------------------------------
 
+  const handleAddMember = async (memberData) => {
+    try {
+      const res = await fetch('/api/settings/members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-name': encodeURIComponent(currentUser)
+        },
+        body: JSON.stringify({ ...memberData, requester: currentUser })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'เพิ่มสมาชิกไม่สำเร็จ');
+      if (result.team_members) {
+        setTeamMembers(result.team_members);
+      }
+      showToast(result.message || 'เพิ่มสมาชิกใหม่เรียบร้อยแล้ว');
+      await loadData(currentUser);
+      return result;
+    } catch (err) {
+      showToast(err.message, 'error');
+      throw err;
+    }
+  };
+
+  const handleUpdateMember = async (id, memberData) => {
+    try {
+      const res = await fetch(`/api/settings/members/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-name': encodeURIComponent(currentUser)
+        },
+        body: JSON.stringify({ ...memberData, requester: currentUser })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'บันทึกการแก้ไขไม่สำเร็จ');
+      const updatedMembers = result.team_members;
+      if (updatedMembers) {
+        setTeamMembers(updatedMembers);
+        if (authUser) {
+          const myRecord = updatedMembers.find(m => m.id === authUser.id);
+          if (myRecord && myRecord.name !== authUser.name) {
+            const updatedSession = { ...authUser, name: myRecord.name, role: myRecord.role, phone: myRecord.phone };
+            setAuthUser(updatedSession);
+            setCurrentUser(myRecord.name);
+            try { localStorage.setItem('itembase_user', JSON.stringify(updatedSession)); } catch (e) {}
+          }
+        }
+      }
+      showToast(result.message || 'บันทึกการแก้ไขข้อมูลเรียบร้อย');
+      await loadData(currentUser);
+      return result;
+    } catch (err) {
+      showToast(err.message, 'error');
+      throw err;
+    }
+  };
+
+  const handleDeleteMember = async (id) => {
+    try {
+      const res = await fetch(`/api/settings/members/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: {
+          'x-user-name': encodeURIComponent(currentUser)
+        }
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'ลบสมาชิกไม่สำเร็จ');
+      if (result.team_members) {
+        setTeamMembers(result.team_members);
+      }
+      showToast(result.message || 'ลบสมาชิกเรียบร้อยแล้ว');
+      await loadData(currentUser);
+      return result;
+    } catch (err) {
+      showToast(err.message, 'error');
+      throw err;
+    }
+  };
+
   const handleSaveMembers = async (members) => {
     try {
       const res = await fetch('/api/settings/members', {
@@ -806,6 +886,9 @@ export default function App() {
                 locations={locations}
                 categories={categories}
                 onSaveMembers={handleSaveMembers}
+                onAddMember={handleAddMember}
+                onUpdateMember={handleUpdateMember}
+                onDeleteMember={handleDeleteMember}
                 onSaveLocations={handleSaveLocations}
                 onSaveCategories={handleSaveCategories}
                 onResetData={handleResetData}
