@@ -44,15 +44,6 @@
       "password": "1739",
       "isAdmin": false,
       "status": "active"
-    },
-    {
-      "id": "TM-11",
-      "name": "123",
-      "role": "ช่างหน้างาน",
-      "phone": "-",
-      "password": "1234",
-      "isAdmin": false,
-      "status": "active"
     }
   ],
   "locations": [
