@@ -93,8 +93,10 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'ไม่สามารถดึงข้อมูลกู้คืนบัญชีได้');
       setRecoveryInfo(data);
-      // Default target
-      setOtpTarget(data.rawPhone || '0643032859');
+      // Default to locked primary phone from system
+      const initialPhone = data.phone || '0643032859';
+      setOtpChannel('phone');
+      setOtpTarget(initialPhone);
     } catch (err) {
       setRecoveryError(err.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูลความปลอดภัย');
     } finally {
@@ -103,12 +105,16 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
   };
 
   const handleSendOtp = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setRecoveryError('');
     setRecoverySuccess('');
 
-    if (!otpTarget.trim()) {
-      setRecoveryError(`กรุณากรอก${otpChannel === 'phone' ? 'เบอร์โทรศัพท์' : 'อีเมล'}ที่ตั้งค่าไว้ในระบบ`);
+    const targetToSend = otpChannel === 'phone' 
+      ? (otpTarget || recoveryInfo?.phone || '0643032859')
+      : (recoveryInfo?.email || 'mai2000@gmail.com');
+
+    if (!targetToSend || !targetToSend.trim()) {
+      setRecoveryError(`ไม่พบข้อมูล${otpChannel === 'phone' ? 'เบอร์โทรศัพท์' : 'อีเมล'}ที่ผูกไว้ในระบบ`);
       return;
     }
 
@@ -120,7 +126,7 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
         body: JSON.stringify({
           name: 'ยุทธการ คำกลอน',
           channel: otpChannel,
-          target: otpTarget.trim()
+          target: targetToSend.trim()
         })
       });
 
@@ -128,7 +134,7 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
       if (!res.ok) throw new Error(data.error || 'ไม่สามารถส่งรหัส OTP ได้');
 
       setOtpReceivedCode(data.otpCode);
-      setOtpSentDisplay(data.targetDisplay || otpTarget.trim());
+      setOtpSentDisplay(data.targetDisplay || targetToSend.trim());
       setOtpStep(2);
       setRecoverySuccess(`✅ ระบบได้ส่งรหัสยืนยัน OTP ไปยัง ${data.channel === 'phone' ? 'เบอร์' : 'อีเมล'} ${data.targetDisplay} เรียบร้อยแล้ว`);
     } catch (err) {
@@ -590,16 +596,16 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
                       <div className="flex items-center gap-2 text-slate-300">
-                        <Phone className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>เบอร์หลัก: <strong className="text-white font-mono">{recoveryInfo?.maskedPhone || '064-***-2859'}</strong></span>
+                        <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span className="truncate">เบอร์หลัก: <strong className="text-white font-mono">{recoveryInfo?.phone || '0643032859'}</strong></span>
                       </div>
                       <div className="flex items-center gap-2 text-slate-300">
-                        <Phone className="w-3.5 h-3.5 text-teal-400" />
-                        <span>เบอร์สำรอง: <strong className="text-white font-mono">{recoveryInfo?.maskedBackupPhone || '096-***-3005'}</strong></span>
+                        <Phone className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                        <span className="truncate">เบอร์สำรอง: <strong className="text-white font-mono">{recoveryInfo?.recoveryPhone || '0962033005'}</strong></span>
                       </div>
                       <div className="flex items-center gap-2 text-slate-300 sm:col-span-2">
-                        <Mail className="w-3.5 h-3.5 text-blue-400" />
-                        <span>อีเมลกู้คืน: <strong className="text-white font-mono">{recoveryInfo?.maskedEmail || 'm***0@gmail.com'}</strong></span>
+                        <Mail className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <span className="truncate">อีเมลกู้คืน: <strong className="text-white font-mono">{recoveryInfo?.email || 'mai2000@gmail.com'}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -614,7 +620,7 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
                         type="button"
                         onClick={() => {
                           setOtpChannel('phone');
-                          setOtpTarget(recoveryInfo?.rawPhone || '0643032859');
+                          setOtpTarget(recoveryInfo?.phone || '0643032859');
                           setRecoveryError('');
                         }}
                         className={`p-3 rounded-2xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition ${
@@ -632,7 +638,7 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
                         type="button"
                         onClick={() => {
                           setOtpChannel('email');
-                          setOtpTarget(recoveryInfo?.rawEmail || 'mai2000@gmail.com');
+                          setOtpTarget(recoveryInfo?.email || 'mai2000@gmail.com');
                           setRecoveryError('');
                         }}
                         className={`p-3 rounded-2xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition ${
@@ -648,57 +654,124 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
                     </div>
                   </div>
 
-                  {/* Target Input */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-                      <span>
-                        {otpChannel === 'phone' ? 'กรอกเบอร์โทรศัพท์ที่ผูกไว้ในระบบ:' : 'กรอกอีเมลที่ผูกไว้ในระบบ:'}
+                  {/* Locked Target Selection (Strictly locked to system data) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+                      <span className="flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>
+                          {otpChannel === 'phone' ? 'เบอร์โทรศัพท์ที่ผูกไว้ในระบบ:' : 'อีเมลที่ผูกไว้ในระบบ:'}
+                        </span>
                       </span>
-                      <span className="text-[10px] text-amber-400/80">ระบบจะตรวจสอบกับข้อมูลที่บันทึกไว้</span>
-                    </label>
-                    <input
-                      type={otpChannel === 'phone' ? 'tel' : 'email'}
-                      value={otpTarget}
-                      onChange={(e) => setOtpTarget(e.target.value)}
-                      placeholder={
-                        otpChannel === 'phone' 
-                          ? 'พิมพ์เบอร์โทร 10 หลัก เช่น 0643032859 หรือ 0962033005' 
-                          : 'พิมพ์อีเมล เช่น mai2000@gmail.com'
-                      }
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
-                      required
-                    />
-
-                    {/* Quick Fill Buttons */}
-                    <div className="mt-2 flex flex-wrap gap-1.5 items-center">
-                      <span className="text-[10px] text-slate-400">กดเลือกข้อมูลที่ผูก:</span>
-                      {otpChannel === 'phone' ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setOtpTarget('0643032859')}
-                            className="text-[11px] px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-emerald-400 hover:bg-slate-750 transition"
-                          >
-                            0643032859 (เบอร์หลัก)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setOtpTarget('0962033005')}
-                            className="text-[11px] px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-teal-400 hover:bg-slate-750 transition"
-                          >
-                            0962033005 (เบอร์สำรอง)
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setOtpTarget('mai2000@gmail.com')}
-                          className="text-[11px] px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-blue-400 hover:bg-slate-750 transition"
-                        >
-                          mai2000@gmail.com
-                        </button>
-                      )}
+                      <span className="text-[10px] text-emerald-400 bg-emerald-950/70 px-2 py-0.5 rounded-full border border-emerald-500/30 font-medium">
+                        🔒 ล็อคตามระบบ ไม่สามารถเปลี่ยนได้
+                      </span>
                     </div>
+
+                    {otpChannel === 'phone' ? (
+                      <div className="space-y-2">
+                        {/* เบอร์หลัก (ล็อคตามระบบ) */}
+                        <div
+                          onClick={() => {
+                            const p = recoveryInfo?.phone || '0643032859';
+                            setOtpTarget(p);
+                          }}
+                          className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between ${
+                            otpTarget === (recoveryInfo?.phone || '0643032859')
+                              ? 'bg-amber-500/15 border-amber-500 text-white shadow-sm'
+                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                              otpTarget === (recoveryInfo?.phone || '0643032859')
+                                ? 'border-amber-400 bg-amber-400 text-slate-950'
+                                : 'border-slate-600'
+                            }`}>
+                              {otpTarget === (recoveryInfo?.phone || '0643032859') && (
+                                <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                                <span>เบอร์หลัก:</span>
+                                <span className="font-mono text-emerald-400 text-sm font-semibold">
+                                  {recoveryInfo?.phone || '0643032859'}
+                                </span>
+                                <span className="text-[10px] text-amber-300/80 font-normal">(เบอร์เริ่มต้น)</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400">เบอร์โทรศัพท์มือถือหลักของผู้ควบคุมระบบ</div>
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                            {recoveryInfo?.maskedPhone || '064-***-2859'}
+                          </span>
+                        </div>
+
+                        {/* เบอร์สำรอง (ถ้ามี) */}
+                        {recoveryInfo?.recoveryPhone && recoveryInfo.recoveryPhone !== '-' && (
+                          <div
+                            onClick={() => {
+                              setOtpTarget(recoveryInfo.recoveryPhone);
+                            }}
+                            className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between ${
+                              otpTarget === recoveryInfo.recoveryPhone
+                                ? 'bg-amber-500/15 border-amber-500 text-white shadow-sm'
+                                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                otpTarget === recoveryInfo.recoveryPhone
+                                  ? 'border-amber-400 bg-amber-400 text-slate-950'
+                                  : 'border-slate-600'
+                              }`}>
+                                {otpTarget === recoveryInfo.recoveryPhone && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                                  <span>เบอร์สำรอง:</span>
+                                  <span className="font-mono text-teal-400 text-sm font-semibold">
+                                    {recoveryInfo.recoveryPhone}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-400">เบอร์สำรองสำหรับกู้คืนความปลอดภัย</div>
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                              {recoveryInfo?.maskedBackupPhone || '096-***-3005'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* อีเมล (ล็อคตามระบบ) */
+                      <div className="p-3.5 rounded-xl border border-blue-500/50 bg-blue-950/20 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                            <Mail className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                              <span>อีเมลกู้คืน:</span>
+                              <span className="font-mono text-blue-300 text-sm font-semibold">
+                                {recoveryInfo?.email || 'mai2000@gmail.com'}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400">อีเมลทางการที่ลงทะเบียนไว้ในระบบความปลอดภัย</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                          {recoveryInfo?.maskedEmail || 'm***0@gmail.com'}
+                        </span>
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-slate-400 flex items-center gap-1.5 pt-1">
+                      <span>ℹ️ ข้อมูลเบอร์และอีเมลถูกล็อคตามฐานข้อมูลระบบ เพื่อความปลอดภัยสูงสุดและป้องกันการแอบอ้าง</span>
+                    </p>
                   </div>
 
                   {/* Step 1 Actions */}

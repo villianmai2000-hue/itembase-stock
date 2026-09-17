@@ -1118,10 +1118,10 @@ app.post('/api/auth/recovery/info', (req, res) => {
   const isSuperAdmin = member.id === 'TM-01' || normalizeName(member.name) === normalizeName('ยุทธการ คำกลอน');
   const secStatus = getSecurityStatus(cleanName);
 
-  // Defaults for Super Admin
-  const primaryPhone = member.phone || '0643032859';
-  const backupPhone = member.recoveryPhone || '0962033005';
-  const recoveryEmail = member.email || 'mai2000@gmail.com';
+  // Defaults & live values for Super Admin
+  const primaryPhone = (member.phone && member.phone !== '-') ? member.phone.trim() : '0643032859';
+  const backupPhone = (member.recoveryPhone && member.recoveryPhone !== '-') ? member.recoveryPhone.trim() : '0962033005';
+  const recoveryEmail = (member.email && member.email !== '-') ? member.email.trim() : 'mai2000@gmail.com';
 
   res.json({
     name: member.name,
@@ -1129,6 +1129,9 @@ app.post('/api/auth/recovery/info', (req, res) => {
     isSuperAdmin,
     isLocked: secStatus.isLocked,
     remainingMinutes: secStatus.remainingMinutes || 0,
+    phone: primaryPhone,
+    recoveryPhone: backupPhone,
+    email: recoveryEmail,
     maskedPhone: maskPhone(primaryPhone),
     maskedBackupPhone: maskPhone(backupPhone),
     maskedEmail: maskEmail(recoveryEmail),
