@@ -696,6 +696,7 @@ export default function App() {
       if (brandingData.recoveryPhone !== undefined) data.append('recoveryPhone', brandingData.recoveryPhone);
       if (brandingData.email !== undefined) data.append('email', brandingData.email);
       if (brandingData.securityPin !== undefined) data.append('securityPin', brandingData.securityPin);
+      if (brandingData.currentPassword) data.append('currentPassword', brandingData.currentPassword);
       if (brandingData.masterPassword) data.append('masterPassword', brandingData.masterPassword);
 
       const res = await fetch('/api/settings/branding', {
@@ -713,8 +714,10 @@ export default function App() {
       }
       showToast(result.message || 'บันทึกการตั้งค่าเว็บไซต์และผูกบัญชีเรียบร้อย');
       await loadData(currentUser);
+      return result;
     } catch (err) {
       showToast(err.message, 'error');
+      throw err;
     }
   };
 
@@ -829,6 +832,7 @@ export default function App() {
                 items={items}
                 teamMembers={teamMembers}
                 currentUser={currentUser}
+                branding={branding}
                 onOpenNewTaskModal={() => {
                   setTaskToEdit(null);
                   setIsTaskModalOpen(true);

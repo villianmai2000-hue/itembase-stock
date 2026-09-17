@@ -189,9 +189,8 @@ export default function SettingsPage({
 
     setSecLoading(true);
     try {
-      // 1. Call onSaveBranding to persist title, images, and bound credentials
       if (onSaveBranding) {
-        await onSaveBranding({
+        const result = await onSaveBranding({
           siteTitle: siteTitleInput,
           profileImageFile,
           profileImageUrl: profileImageFile ? undefined : profilePreview,
@@ -201,29 +200,17 @@ export default function SettingsPage({
           recoveryPhone: secRecoveryPhone,
           email: secEmail,
           securityPin: secPin,
+          currentPassword: secCurrentPassword,
           masterPassword: secNewPassword || undefined
         });
+
+        if (result?.adminProfile) {
+          if (result.adminProfile.phone) setSecPhone(result.adminProfile.phone);
+          if (result.adminProfile.recoveryPhone) setSecRecoveryPhone(result.adminProfile.recoveryPhone);
+          if (result.adminProfile.email) setSecEmail(result.adminProfile.email);
+          if (result.adminProfile.securityPin) setSecPin(result.adminProfile.securityPin);
+        }
       }
-
-      // 2. Sync to /api/auth/security-profile
-      const res = await fetch('/api/auth/security-profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-name': encodeURIComponent('ยุทธการ คำกลอน')
-        },
-        body: JSON.stringify({
-          phone: secPhone,
-          recoveryPhone: secRecoveryPhone,
-          email: secEmail,
-          securityPin: secPin,
-          currentPassword: secCurrentPassword,
-          newPassword: secNewPassword
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'บันทึกข้อมูลไม่สำเร็จ');
 
       setSecSaveMessage('✅ บันทึกการตั้งค่าเว็บไซต์และผูกบัญชีความปลอดภัยเรียบร้อยแล้ว!');
       setProfileImageFile(null);
@@ -231,7 +218,6 @@ export default function SettingsPage({
       setSecCurrentPassword('');
       setSecNewPassword('');
       setSecConfirmPassword('');
-      fetchSecurityProfile();
       setTimeout(() => setSecSaveMessage(''), 4000);
     } catch (err) {
       setSecErrorMessage(err.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');

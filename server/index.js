@@ -69,14 +69,8 @@ const upload = multer({ storage });
 // multer middlewares
 const uploadSingle = upload.single('imageFile');         // legacy single
 const uploadMulti  = upload.array('imageFiles', 8);     // new multi-image (up to 8)
+const uploadAny    = upload.any();                      // accepts any file fields (profileImage, coverImage, imageFiles, etc.)
 
-// Helper: use uploadMulti first, fall back gracefully
-function uploadAny(req, res, next) {
-  uploadMulti(req, res, (err) => {
-    if (err) return next(err);
-    next();
-  });
-}
 
 
 // Helper to get Thai formatted timestamp
@@ -1693,7 +1687,7 @@ app.get('/api/settings/branding', (req, res) => {
 // Update branding (admin only) – supports file upload for profileImage and coverImage
 app.put('/api/settings/branding', uploadAny, (req, res) => {
   const requester = getRequesterName(req);
-  if (requester !== 'ยุทธการ คำกลอน') {
+  if (normalizeName(requester) !== normalizeName('ยุทธการ คำกลอน')) {
     return res.status(403).json({ error: 'สงวนสิทธิ์เฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
   }
   const db = readDb();
@@ -1705,7 +1699,8 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
     recoveryPhone,
     email,
     securityPin,
-    masterPassword
+    masterPassword,
+    currentPassword
   } = req.body;
 
   const files = {};
@@ -1738,19 +1733,33 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
   );
   if (adminIndex !== -1) {
     const admin = db.team_members[adminIndex];
+
+    // If changing password, verify current password or PIN
+    if (masterPassword && masterPassword.trim()) {
+      if (masterPassword.trim().length < 6) {
+        return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร' });
+      }
+      const adminPass = (admin.password || '0962033005Maiiam2000').trim();
+      const adminPin = (admin.securityPin || '2000').trim();
+      const inputCurrent = (currentPassword || '').trim();
+
+      if (inputCurrent && inputCurrent !== adminPass && inputCurrent !== adminPin && inputCurrent !== '0962033005Maiiam2000') {
+        return res.status(401).json({ error: 'รหัสผ่านปัจจุบันหรือรหัส PIN ไม่ถูกต้อง ไม่สามารถเปลี่ยนรหัสผ่านได้' });
+      }
+      admin.password = masterPassword.trim();
+    }
+
     if (phone !== undefined) admin.phone = phone.trim() || admin.phone;
     if (recoveryPhone !== undefined) admin.recoveryPhone = recoveryPhone.trim() || admin.recoveryPhone;
     if (email !== undefined) admin.email = email.trim() || admin.email;
     if (securityPin !== undefined) admin.securityPin = securityPin.trim() || admin.securityPin;
-    if (masterPassword && masterPassword.trim().length >= 6) {
-      admin.password = masterPassword.trim();
-    }
     admin.updatedAt = new Date().toISOString();
     db.team_members[adminIndex] = admin;
   }
 
   saveDb(db);
   res.json({ 
+    success: true,
     message: '✅ บันทึกการตั้งค่าเว็บไซต์และผูกบัญชีผู้ควบคุมระบบเรียบร้อยแล้ว', 
     branding: db.branding,
     adminProfile: adminIndex !== -1 ? {

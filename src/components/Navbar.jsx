@@ -178,12 +178,22 @@ export default function Navbar({
             {/* User Badge & Logout Button */}
             <div className="flex items-center gap-2 border-l border-slate-700 pl-2 sm:pl-3">
               <div className="flex items-center gap-2 bg-slate-800/90 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${
                   isAdmin 
                     ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
                     : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                 }`}>
-                  {isAdmin ? <ShieldCheck className="w-4 h-4 text-amber-400" /> : <UserCheck className="w-4 h-4 text-emerald-400" />}
+                  {isAdmin && branding?.profileImage ? (
+                    <img 
+                      src={branding.profileImage} 
+                      alt={currentUser} 
+                      className="w-full h-full object-cover" 
+                    />
+                  ) : isAdmin ? (
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                  ) : (
+                    <UserCheck className="w-4 h-4 text-emerald-400" />
+                  )}
                 </div>
                 <div className="text-left max-w-[100px] sm:max-w-[140px] truncate">
                   <div className="font-semibold text-slate-100 truncate">{currentUser}</div>

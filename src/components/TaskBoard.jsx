@@ -24,6 +24,7 @@ export default function TaskBoard({
   items, 
   teamMembers, 
   currentUser,
+  branding = {},
   onOpenNewTaskModal, 
   onEditTask, 
   onDeleteTask, 
@@ -76,29 +77,96 @@ export default function TaskBoard({
   return (
     <div className="space-y-6">
       
-      {/* Top Banner / Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <span>กระดานภาพรวมงานทีม (Team Tasks)</span>
-            <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full font-semibold">
-              {filteredTasks.length} งาน
-            </span>
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            ติดตามงานก่อสร้าง มอบหมายช่างในทีม และเบิกจ่าย-ส่งคืนวัสดุอุปกรณ์แบบตัดสต็อกอัตโนมัติ
-          </p>
-        </div>
+      {/* Top Banner / Actions with Profile & Cover Image */}
+      <div className="relative overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white">
+        {branding?.coverImage ? (
+          <div className="relative min-h-[140px] sm:min-h-[170px] bg-slate-900 flex items-end">
+            {/* Cover Banner Image */}
+            <img
+              src={branding.coverImage}
+              alt="Cover Banner"
+              className="absolute inset-0 w-full h-full object-cover object-center"
+            />
+            {/* Dark gradient overlay for crystal-clear readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-900/65 to-slate-950/30" />
+            <div className="absolute inset-0 bg-black/20" />
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onOpenNewTaskModal}
-            className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-orange-600/20 transition transform active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>สร้างงานใหม่</span>
-          </button>
-        </div>
+            {/* Content over banner */}
+            <div className="relative z-10 w-full p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white">
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                {branding?.profileImage ? (
+                  <img
+                    src={branding.profileImage}
+                    alt="Logo / Profile"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-white/90 shadow-xl shrink-0 bg-white"
+                  />
+                ) : (
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center border-2 border-white/90 shadow-xl shrink-0">
+                    <HardHat className="w-7 h-7 text-white" />
+                  </div>
+                )}
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-bold text-white flex flex-wrap items-center gap-2 drop-shadow-sm">
+                    <span>กระดานภาพรวมงานทีม (Team Tasks)</span>
+                    <span className="text-xs bg-orange-500/40 border border-orange-400/50 text-orange-100 px-2.5 py-0.5 rounded-full font-semibold backdrop-blur-sm">
+                      {filteredTasks.length} งาน
+                    </span>
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-200 mt-1 max-w-2xl leading-relaxed drop-shadow-sm">
+                    ติดตามงานก่อสร้าง มอบหมายช่างในทีม และเบิกจ่าย-ส่งคืนวัสดุอุปกรณ์แบบตัดสต็อกอัตโนมัติ
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                <button
+                  onClick={onOpenNewTaskModal}
+                  className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-orange-600/40 transition transform active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>สร้างงานใหม่</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 sm:gap-4">
+              {branding?.profileImage ? (
+                <img
+                  src={branding.profileImage}
+                  alt="Logo / Profile"
+                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border border-slate-200 shadow-sm shrink-0 bg-slate-100"
+                />
+              ) : (
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center shadow-md shadow-orange-500/20 text-white shrink-0">
+                  <HardHat className="w-6 h-6 sm:w-7 sm:h-7" />
+                </div>
+              )}
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
+                  <span>กระดานภาพรวมงานทีม (Team Tasks)</span>
+                  <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full font-semibold">
+                    {filteredTasks.length} งาน
+                  </span>
+                </h1>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  ติดตามงานก่อสร้าง มอบหมายช่างในทีม และเบิกจ่าย-ส่งคืนวัสดุอุปกรณ์แบบตัดสต็อกอัตโนมัติ
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onOpenNewTaskModal}
+                className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-orange-600/20 transition transform active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>สร้างงานใหม่</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filter Bar */}
