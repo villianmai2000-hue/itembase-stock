@@ -563,7 +563,7 @@ app.get('/api/tasks', (req, res) => {
 // Create new task
 app.post('/api/tasks', (req, res) => {
   const db = readDb();
-  const { title, description, priority, assignee, dueDate, materials, user } = req.body;
+  const { title, description, priority, assignee, dueDate, materials, attachments, user } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'กรุณาระบุชื่องาน' });
@@ -603,7 +603,8 @@ app.post('/api/tasks', (req, res) => {
     dueDate: dueDate || '',
     createdAt: getThaiTimestamp(),
     createdBy: user || 'ยุทธการ คำกลอน',
-    materials: formattedMaterials
+    materials: formattedMaterials,
+    attachments: Array.isArray(attachments) ? attachments : []
   };
 
   db.tasks.unshift(newTask);
@@ -621,7 +622,7 @@ app.put('/api/tasks/:id', (req, res) => {
     return res.status(404).json({ error: 'ไม่พบงานที่ต้องการแก้ไข' });
   }
 
-  const { title, description, status, priority, assignee, dueDate, materials } = req.body;
+  const { title, description, status, priority, assignee, dueDate, materials, attachments } = req.body;
 
   // Validate assignee if provided
   let matchedAssignee = null;
@@ -641,7 +642,8 @@ app.put('/api/tasks/:id', (req, res) => {
     priority: priority !== undefined ? priority : current.priority,
     assignee: matchedAssignee ? matchedAssignee.name : (assignee !== undefined ? assignee : current.assignee),
     dueDate: dueDate !== undefined ? dueDate : current.dueDate,
-    materials: materials !== undefined ? materials : current.materials
+    materials: materials !== undefined ? materials : current.materials,
+    attachments: attachments !== undefined ? (Array.isArray(attachments) ? attachments : []) : (current.attachments || [])
   };
 
   saveDb(db);
@@ -1698,6 +1700,7 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
     siteTitle, 
     profileImageUrl, 
     coverImageUrl,
+    bannerHeight,
     phone,
     recoveryPhone,
     email,
@@ -1725,6 +1728,7 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
 
   db.branding = db.branding || {};
   if (siteTitle !== undefined) db.branding.siteTitle = siteTitle.trim() || 'ItemBase';
+  if (bannerHeight !== undefined) db.branding.bannerHeight = bannerHeight;
   if (files.profileImage) db.branding.profileImage = files.profileImage;
   else if (profileImageUrl !== undefined) db.branding.profileImage = profileImageUrl;
   if (files.coverImage) db.branding.coverImage = files.coverImage;

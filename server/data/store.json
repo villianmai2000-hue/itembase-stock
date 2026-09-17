@@ -11,7 +11,7 @@
       "password": "0962033005Maiiam2000",
       "isAdmin": true,
       "status": "active",
-      "updatedAt": "2026-09-17T12:55:57.046Z"
+      "updatedAt": "2026-09-17T13:34:37.350Z"
     },
     {
       "id": "TM-10",
@@ -886,7 +886,27 @@
       "dueDate": "2026-09-11",
       "createdAt": "2026-09-10T07:23:48.784Z",
       "createdBy": "ยุทธการ คำกลอน",
-      "materials": []
+      "materials": [],
+      "attachments": [
+        {
+          "id": "sample-pdf-1",
+          "name": "แบบแปลนงานก่อสร้าง_ชั้น1.pdf",
+          "type": "application/pdf",
+          "size": 245000,
+          "isPdf": true,
+          "url": "data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp...",
+          "uploadedAt": "2026-09-17T13:34:30.303Z"
+        },
+        {
+          "id": "sample-img-1",
+          "name": "ภาพหน้างาน_ตรวจสอบแนวเสา.jpg",
+          "type": "image/jpeg",
+          "size": 154000,
+          "isPdf": false,
+          "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "uploadedAt": "2026-09-17T13:34:30.304Z"
+        }
+      ]
     }
   ],
   "inventory_logs": [
@@ -1774,6 +1794,7 @@
   "branding": {
     "siteTitle": "ItemBase Stock Pro",
     "profileImage": "",
-    "coverImage": ""
+    "coverImage": "",
+    "bannerHeight": "200px"
   }
 }

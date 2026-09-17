@@ -1,5 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Package, Calendar, User, AlertCircle } from 'lucide-react';
+import { 
+  X, 
+  Plus, 
+  Trash2, 
+  Package, 
+  Calendar, 
+  User, 
+  AlertCircle,
+  Paperclip,
+  Upload,
+  Eye,
+  FileText,
+  Maximize2
+} from 'lucide-react';
+import { ImageLightboxModal, PdfViewerModal } from './FilePreviewModal';
 
 export default function TaskModal({ 
   isOpen, 
@@ -16,6 +30,10 @@ export default function TaskModal({
   const [assignee, setAssignee] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [materials, setMaterials] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [previewPdf, setPreviewPdf] = useState(null);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -27,6 +45,7 @@ export default function TaskModal({
       setAssignee(matched ? matched.name : (taskToEdit.assignee || (teamMembers[0]?.name || '')));
       setDueDate(taskToEdit.dueDate || '');
       setMaterials(taskToEdit.materials ? JSON.parse(JSON.stringify(taskToEdit.materials)) : []);
+      setAttachments(taskToEdit.attachments && Array.isArray(taskToEdit.attachments) ? JSON.parse(JSON.stringify(taskToEdit.attachments)) : []);
     } else {
       setTitle('');
       setDescription('');
@@ -38,9 +57,46 @@ export default function TaskModal({
       d.setDate(d.getDate() + 3);
       setDueDate(d.toISOString().split('T')[0]);
       setMaterials([]);
+      setAttachments([]);
     }
     setError('');
   }, [taskToEdit, isOpen, teamMembers]);
+
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setIsUploadingFiles(true);
+    try {
+      const newAttachments = await Promise.all(files.map(file => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+            resolve({
+              id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+              name: file.name,
+              type: isPdf ? 'application/pdf' : (file.type || 'image/jpeg'),
+              size: file.size,
+              isPdf,
+              url: event.target.result,
+              uploadedAt: new Date().toISOString()
+            });
+          };
+          reader.readAsDataURL(file);
+        });
+      }));
+      setAttachments(prev => [...prev, ...newAttachments]);
+    } catch (err) {
+      console.error('Failed to read files:', err);
+    } finally {
+      setIsUploadingFiles(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveAttachment = (index) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
 
   if (!isOpen) return null;
 
@@ -101,7 +157,8 @@ export default function TaskModal({
       priority,
       assignee,
       dueDate,
-      materials
+      materials,
+      attachments
     });
   };
 
@@ -235,6 +292,97 @@ export default function TaskModal({
             </div>
           </div>
 
+          {/* Attachments Section (Images & PDFs) */}
+          <div className="border-t border-slate-200 pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Paperclip className="w-4 h-4 text-orange-500" />
+                <span>รูปภาพและเอกสารแนบ / แบบแปลน PDF ({attachments.length})</span>
+              </label>
+              <div>
+                <input
+                  type="file"
+                  id="task-file-input"
+                  multiple
+                  accept="image/*,application/pdf,.pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="task-file-input"
+                  className="cursor-pointer text-xs text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-lg border border-orange-200 transition"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{isUploadingFiles ? 'กำลังประมวลผล...' : '+ เพิ่มรูปภาพ / PDF'}</span>
+                </label>
+              </div>
+            </div>
+
+            {attachments.length === 0 ? (
+              <p className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
+                ยังไม่มีรูปภาพหรือไฟล์แนบ (รองรับภาพทุกนามสกุล และไฟล์ PDF หลายไฟล์ พร้อมระบบกดดูภาพขยายและเปิดอ่าน PDF ได้ทันที)
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-52 overflow-y-auto pr-1">
+                {attachments.map((file, idx) => (
+                  <div 
+                    key={file.id || idx} 
+                    className="group relative bg-slate-50 rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow transition flex flex-col"
+                  >
+                    {file.isPdf ? (
+                      <div 
+                        onClick={() => setPreviewPdf(file)}
+                        className="p-3 flex flex-col items-center justify-center flex-1 min-h-[90px] bg-red-50/40 cursor-pointer hover:bg-red-50 transition"
+                      >
+                        <FileText className="w-7 h-7 text-red-500 mb-1" />
+                        <span className="text-[11px] font-medium text-slate-700 text-center truncate w-full px-1">
+                          {file.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {file.size ? (file.size / 1024).toFixed(0) + ' KB' : 'เอกสาร PDF'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div 
+                        onClick={() => setPreviewImage(file)}
+                        className="relative h-24 w-full bg-slate-100 overflow-hidden cursor-pointer"
+                      >
+                        <img 
+                          src={file.url} 
+                          alt={file.name} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <Maximize2 className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-1.5 bg-white border-t border-slate-100 flex items-center justify-between text-xs">
+                      <button
+                        type="button"
+                        onClick={() => file.isPdf ? setPreviewPdf(file) : setPreviewImage(file)}
+                        className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 px-1.5 py-0.5 rounded transition"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>{file.isPdf ? 'เปิดดู PDF' : 'ดูรูปขยาย'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(idx)}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                        title="ลบไฟล์"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Requisition Materials Section */}
           <div className="border-t border-slate-200 pt-4">
             <div className="flex items-center justify-between mb-2">
@@ -329,6 +477,20 @@ export default function TaskModal({
 
         </form>
       </div>
+
+      {/* Lightbox Modal for Images */}
+      <ImageLightboxModal
+        isOpen={!!previewImage}
+        image={previewImage}
+        onClose={() => setPreviewImage(null)}
+      />
+
+      {/* Embedded PDF Viewer Modal */}
+      <PdfViewerModal
+        isOpen={!!previewPdf}
+        pdf={previewPdf}
+        onClose={() => setPreviewPdf(null)}
+      />
     </div>
   );
 }

@@ -60,6 +60,8 @@ export default function App() {
     }
   }, [authUser]);
 
+  const isAdmin = authUser?.isAdmin || currentUser === 'ยุทธการ คำกลอน';
+
   // Save offline mirror to browser localStorage
   const saveOfflineSnapshot = (currentItems, currentLogs) => {
     try {
@@ -698,6 +700,7 @@ export default function App() {
       if (brandingData.securityPin !== undefined) data.append('securityPin', brandingData.securityPin);
       if (brandingData.currentPassword) data.append('currentPassword', brandingData.currentPassword);
       if (brandingData.masterPassword) data.append('masterPassword', brandingData.masterPassword);
+      if (brandingData.bannerHeight !== undefined) data.append('bannerHeight', brandingData.bannerHeight);
 
       const res = await fetch('/api/settings/branding', {
         method: 'PUT',
@@ -832,7 +835,9 @@ export default function App() {
                 items={items}
                 teamMembers={teamMembers}
                 currentUser={currentUser}
+                isAdmin={isAdmin}
                 branding={branding}
+                onSaveBranding={handleSaveBranding}
                 onOpenNewTaskModal={() => {
                   setTaskToEdit(null);
                   setIsTaskModalOpen(true);
