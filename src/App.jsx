@@ -32,21 +32,63 @@ export default function App() {
     try { localStorage.setItem('itembase_tab', tab); } catch {}
   };
 
-  // Loading states to prevent double-submit
+  // Cache helpers for instant 0ms hydration
+  const getOfflineSnapshot = () => {
+    try {
+      const raw = localStorage.getItem('itembase_offline_snapshot');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+  };
+  const offlineSnapshot = getOfflineSnapshot();
+
+  const getCachedTasks = () => {
+    try {
+      const raw = localStorage.getItem('itembase_tasks_cache');
+      if (raw) return JSON.parse(raw) || [];
+    } catch (e) {}
+    return [];
+  };
+
+  const getCachedSettings = () => {
+    try {
+      const raw = localStorage.getItem('itembase_settings_cache');
+      if (raw) return JSON.parse(raw) || {};
+    } catch (e) {}
+    return {};
+  };
+
+  const getCachedBranding = () => {
+    try {
+      const raw = localStorage.getItem('itembase_branding_cache');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+  };
+
+  const initialSettings = getCachedSettings();
+  const initialBranding = getCachedBranding() || { siteTitle: 'ItemBase', profileImage: '', coverImage: '' };
+  const initialTasks = getCachedTasks();
+  const initialItems = (offlineSnapshot?.items && Array.isArray(offlineSnapshot.items)) ? offlineSnapshot.items : [];
+  const initialLogs = (offlineSnapshot?.logs && Array.isArray(offlineSnapshot.logs)) ? offlineSnapshot.logs : [];
+
+  // Loading states to prevent double-submit & manual refresh state
   const [isSavingItem, setIsSavingItem] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Branding (site title, profile image, cover image)
-  const [branding, setBranding] = useState({ siteTitle: 'ItemBase', profileImage: '', coverImage: '' });
+  const [branding, setBranding] = useState(initialBranding);
   
-  // Data States
-  const [tasks, setTasks] = useState([]);
-  const [items, setItems] = useState([]);
-  const [logs, setLogs] = useState([]);
-  const [teamMembers, setTeamMembers] = useState([]);
-  const [locations, setLocations] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  // Data States (Preloaded synchronously from local storage cache)
+  const [tasks, setTasks] = useState(initialTasks);
+  const [items, setItems] = useState(initialItems);
+  const [logs, setLogs] = useState(initialLogs);
+  const [teamMembers, setTeamMembers] = useState(initialSettings.team_members || []);
+  const [locations, setLocations] = useState(initialSettings.locations || []);
+  const [categories, setCategories] = useState(initialSettings.categories || []);
+  // Only block screen if device has zero cached items and zero cached tasks
+  const [loading, setLoading] = useState(() => !(initialItems.length > 0 || initialTasks.length > 0));
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(() => initialItems.length > 0 || initialTasks.length > 0);
   const [serverOnline, setServerOnline] = useState(true);
   const [dbStatus, setDbStatus] = useState({ isCloud: false, persistent: false, mode: 'local_file' });
   const [restoreCandidate, setRestoreCandidate] = useState(null);
@@ -80,6 +122,21 @@ export default function App() {
       }
     } catch (e) {}
   };
+
+  // Sync cache changes automatically
+  useEffect(() => {
+    if (items.length > 0) {
+      saveOfflineSnapshot(items, logs);
+    }
+  }, [items, logs]);
+
+  useEffect(() => {
+    if (tasks.length > 0) {
+      try {
+        localStorage.setItem('itembase_tasks_cache', JSON.stringify(tasks));
+      } catch (e) {}
+    }
+  }, [tasks]);
 
   // Modals state
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -122,10 +179,10 @@ export default function App() {
     showToast('ออกจากระบบเรียบร้อยแล้ว');
   };
 
-  // Fetch initial or background data with strict timeout & offline cache guarantee
+  // Fetch initial or background data with fast timeout & offline cache guarantee
   const loadData = async (activeUserName, forceShowSpinner = false) => {
     try {
-      if (!hasLoadedOnce || forceShowSpinner) {
+      if (forceShowSpinner) {
         setLoading(true);
       }
       const reqHeaders = {};
@@ -137,7 +194,7 @@ export default function App() {
       const t = Date.now();
       const fetchJson = async (url, opts = {}) => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s fast timeout
         try {
           const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}_t=${t}`, {
             cache: 'no-store',
@@ -171,11 +228,18 @@ export default function App() {
 
       if (resDbStatus) setDbStatus(resDbStatus);
 
-      if (Array.isArray(resTasks)) setTasks(resTasks);
+      if (Array.isArray(resTasks)) {
+        setTasks(resTasks);
+        try { localStorage.setItem('itembase_tasks_cache', JSON.stringify(resTasks)); } catch (e) {}
+      }
+
       if (Array.isArray(resItems) && resItems.length > 0) {
         setItems(resItems);
         setServerOnline(true);
-        saveOfflineSnapshot(resItems, resLogs);
+        saveOfflineSnapshot(resItems, resLogs || logs);
+      } else if (Array.isArray(resItems)) {
+        setItems(resItems);
+        setServerOnline(true);
       } else {
         // Fallback to offline local snapshot if server is slow or offline
         try {
@@ -197,9 +261,11 @@ export default function App() {
         if (Array.isArray(resSettings.team_members)) setTeamMembers(resSettings.team_members);
         if (Array.isArray(resSettings.locations)) setLocations(resSettings.locations);
         if (Array.isArray(resSettings.categories)) setCategories(resSettings.categories);
+        try { localStorage.setItem('itembase_settings_cache', JSON.stringify(resSettings)); } catch (e) {}
       }
       if (resBranding && typeof resBranding === 'object') {
         setBranding(prev => ({ ...prev, ...resBranding }));
+        try { localStorage.setItem('itembase_branding_cache', JSON.stringify(resBranding)); } catch (e) {}
         if (resBranding.siteTitle) {
           document.title = `${resBranding.siteTitle} - ระบบคลังและจัดการงาน`;
         }
@@ -218,6 +284,20 @@ export default function App() {
     } finally {
       setLoading(false);
       setHasLoadedOnce(true);
+      setIsRefreshing(false);
+    }
+  };
+
+  // Manual one-click refresh button handler
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadData(undefined, false);
+      showToast('✅ รีเฟรชข้อมูลล่าสุดเรียบร้อยแล้ว');
+    } catch (e) {
+      showToast('⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ แสดงข้อมูลล่าสุดในเครื่อง', 'warning');
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -816,6 +896,8 @@ export default function App() {
         serverOnline={serverOnline}
         dbStatus={dbStatus}
         onReconnect={() => loadData()}
+        onRefresh={handleManualRefresh}
+        isRefreshing={isRefreshing}
         openAddModal={() => {
           setItemToEdit(null);
           setIsAddModalOpen(true);
@@ -856,9 +938,10 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {loading ? (
-          <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
-            กำลังโหลดข้อมูลระบบงานและสต็อก ItemBase...
+        {loading && items.length === 0 && tasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-sm gap-3">
+            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+            <span>กำลังโหลดข้อมูลระบบงานและสต็อก ItemBase...</span>
           </div>
         ) : (
           <>

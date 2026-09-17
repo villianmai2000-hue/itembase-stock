@@ -14,7 +14,8 @@ import {
   LogOut,
   ShieldCheck,
   Lock,
-  Smartphone
+  Smartphone,
+  RotateCw
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -30,7 +31,9 @@ export default function Navbar({
   openMobileShareModal,
   serverOnline = true,
   dbStatus = {},
-  onReconnect
+  onReconnect,
+  onRefresh,
+  isRefreshing = false
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAdmin = authUser?.isAdmin || currentUser === 'ยุทธการ คำกลอน';
@@ -145,6 +148,19 @@ export default function Navbar({
               </button>
             )}
 
+            {/* Refresh Button */}
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className={`flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs sm:text-sm font-medium px-2.5 sm:px-3 py-2 rounded-lg border border-slate-700 shadow transition transform active:scale-95 ${
+                isRefreshing ? 'opacity-70 cursor-wait' : ''
+              }`}
+              title="รีเฟรชข้อมูลล่าสุดจากเซิร์ฟเวอร์"
+            >
+              <RotateCw className={`w-4 h-4 text-orange-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">รีเฟรช</span>
+            </button>
+
             {/* Scan QR Quick Button */}
             <button
               onClick={openScanModal}
@@ -256,6 +272,17 @@ export default function Navbar({
                 </button>
               );
             })}
+
+            <button
+              onClick={() => {
+                if (onRefresh) onRefresh();
+              }}
+              disabled={isRefreshing}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-200 hover:bg-slate-700 transition"
+            >
+              <RotateCw className={`w-5 h-5 text-orange-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'กำลังรีเฟรชข้อมูล...' : '🔄 รีเฟรชข้อมูลล่าสุด'}</span>
+            </button>
 
             <button
               onClick={() => {
