@@ -35,6 +35,15 @@
       "isAdmin": false,
       "status": "active",
       "password": "1234"
+    },
+    {
+      "id": "TM-05",
+      "name": "DVP",
+      "role": "ช่างหน้างาน",
+      "phone": "-",
+      "password": "1739",
+      "isAdmin": false,
+      "status": "active"
     }
   ],
   "locations": [
