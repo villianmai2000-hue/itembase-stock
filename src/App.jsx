@@ -60,7 +60,13 @@ export default function App() {
     }
   }, [authUser]);
 
-  const isAdmin = authUser?.isAdmin || currentUser === 'ยุทธการ คำกลอน';
+  const isAdmin = Boolean(
+    authUser?.isAdmin || 
+    (currentUser && currentUser.replace(/\s+/g, ' ').trim() === 'ยุทธการ คำกลอน') ||
+    (authUser?.name && authUser.name.replace(/\s+/g, ' ').trim() === 'ยุทธการ คำกลอน') ||
+    authUser?.role === 'admin' || 
+    authUser?.id === 'TM-01'
+  );
 
   // Save offline mirror to browser localStorage
   const saveOfflineSnapshot = (currentItems, currentLogs) => {
@@ -116,7 +122,7 @@ export default function App() {
     showToast('ออกจากระบบเรียบร้อยแล้ว');
   };
 
-  // Fetch initial or background data
+  // Fetch initial or background data with strict timeout & offline cache guarantee
   const loadData = async (activeUserName, forceShowSpinner = false) => {
     try {
       if (!hasLoadedOnce || forceShowSpinner) {
@@ -130,59 +136,61 @@ export default function App() {
 
       const t = Date.now();
       const fetchJson = async (url, opts = {}) => {
-        const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}_t=${t}`, {
-          cache: 'no-store',
-          ...opts,
-          headers: { ...(opts.headers || {}) }
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+        try {
+          const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}_t=${t}`, {
+            cache: 'no-store',
+            signal: controller.signal,
+            ...opts,
+            headers: { ...(opts.headers || {}) }
+          });
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const text = await res.text();
+          try {
+            return JSON.parse(text);
+          } catch (pe) {
+            console.warn(`Non-JSON response from ${url}`);
+            return null;
+          }
+        } catch (err) {
+          clearTimeout(timeoutId);
+          return null;
+        }
       };
 
       const [resTasks, resItems, resLogs, resSettings, resBranding, resDbStatus] = await Promise.all([
-        fetchJson('/api/tasks').catch(() => null),
-        fetchJson('/api/items').catch(() => null),
-        fetchJson('/api/logs').catch(() => null),
-        fetchJson('/api/settings', { headers: reqHeaders }).catch(() => null),
-        fetchJson('/api/settings/branding').catch(() => null),
-        fetchJson('/api/db-status').catch(() => null)
+        fetchJson('/api/tasks'),
+        fetchJson('/api/items'),
+        fetchJson('/api/logs'),
+        fetchJson('/api/settings', { headers: reqHeaders }),
+        fetchJson('/api/settings/branding'),
+        fetchJson('/api/db-status')
       ]);
 
       if (resDbStatus) setDbStatus(resDbStatus);
 
       if (Array.isArray(resTasks)) setTasks(resTasks);
-      if (Array.isArray(resItems)) {
+      if (Array.isArray(resItems) && resItems.length > 0) {
         setItems(resItems);
         setServerOnline(true);
-
-        // Safety check: Detect if browser localStorage has newer edits that server might have lost due to restart
+        saveOfflineSnapshot(resItems, resLogs);
+      } else {
+        // Fallback to offline local snapshot if server is slow or offline
         try {
           const rawSnap = localStorage.getItem('itembase_offline_snapshot');
           if (rawSnap) {
             const snap = JSON.parse(rawSnap);
             if (snap && Array.isArray(snap.items) && snap.items.length > 0) {
-              const hasMissingItems = snap.items.some(sItem => !resItems.some(rItem => rItem.id.toLowerCase() === sItem.id.toLowerCase()));
-              const hasNewerEdits = snap.items.some(sItem => {
-                const rItem = resItems.find(r => r.id.toLowerCase() === sItem.id.toLowerCase());
-                if (!rItem) return true;
-                return sItem.updatedAt && rItem.updatedAt && new Date(sItem.updatedAt) > new Date(rItem.updatedAt);
-              });
-
-              if (hasMissingItems || hasNewerEdits) {
-                console.warn('[Auto-Backup] Browser has newer updates than server!');
-                setRestoreCandidate(snap);
-              } else {
-                setRestoreCandidate(null);
-                saveOfflineSnapshot(resItems, resLogs);
-              }
+              setItems(snap.items);
+              if (Array.isArray(snap.logs)) setLogs(snap.logs);
             }
-          } else {
-            saveOfflineSnapshot(resItems, resLogs);
           }
         } catch (e) {}
-      } else {
-        setServerOnline(false);
+        if (!resItems) setServerOnline(false);
       }
+
       if (Array.isArray(resLogs)) setLogs(resLogs);
       
       if (resSettings && typeof resSettings === 'object') {
@@ -190,14 +198,23 @@ export default function App() {
         if (Array.isArray(resSettings.locations)) setLocations(resSettings.locations);
         if (Array.isArray(resSettings.categories)) setCategories(resSettings.categories);
       }
-      if (resBranding && resBranding.siteTitle) {
-        setBranding(resBranding);
-        document.title = `${resBranding.siteTitle} - ระบบคลังและจัดการงาน`;
+      if (resBranding && typeof resBranding === 'object') {
+        setBranding(prev => ({ ...prev, ...resBranding }));
+        if (resBranding.siteTitle) {
+          document.title = `${resBranding.siteTitle} - ระบบคลังและจัดการงาน`;
+        }
       }
     } catch (err) {
       console.error('Error loading data:', err);
+      // Ensure offline data is displayed on error
+      try {
+        const rawSnap = localStorage.getItem('itembase_offline_snapshot');
+        if (rawSnap) {
+          const snap = JSON.parse(rawSnap);
+          if (snap && Array.isArray(snap.items)) setItems(snap.items);
+        }
+      } catch (e) {}
       setServerOnline(false);
-      showToast('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง', 'error');
     } finally {
       setLoading(false);
       setHasLoadedOnce(true);
@@ -252,7 +269,13 @@ export default function App() {
         body: JSON.stringify({ ...taskData, user: currentUser })
       });
 
-      const result = await res.json();
+      const text = await res.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error(text.startsWith('<') ? 'เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' : text);
+      }
       if (!res.ok) throw new Error(result.error || 'บันทึกงานไม่สำเร็จ');
 
       setIsTaskModalOpen(false);
@@ -261,6 +284,7 @@ export default function App() {
       loadData();
     } catch (err) {
       showToast(err.message, 'error');
+      throw err;
     }
   };
 
@@ -701,13 +725,22 @@ export default function App() {
       if (brandingData.currentPassword) data.append('currentPassword', brandingData.currentPassword);
       if (brandingData.masterPassword) data.append('masterPassword', brandingData.masterPassword);
       if (brandingData.bannerHeight !== undefined) data.append('bannerHeight', brandingData.bannerHeight);
+      if (brandingData.bannerFit !== undefined) data.append('bannerFit', brandingData.bannerFit);
+      if (brandingData.bannerPosition !== undefined) data.append('bannerPosition', brandingData.bannerPosition);
 
       const res = await fetch('/api/settings/branding', {
         method: 'PUT',
         headers: { 'x-user-name': encodeURIComponent(currentUser) },
         body: data
       });
-      const result = await res.json();
+
+      const text = await res.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error(text.startsWith('<') ? 'เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' : text);
+      }
       if (!res.ok) throw new Error(result.error || 'บันทึกการตั้งค่าเว็บไซต์ไม่สำเร็จ');
       if (result.branding) {
         setBranding(result.branding);

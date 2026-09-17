@@ -20,7 +20,9 @@ import {
   Paperclip,
   FileText,
   Maximize2,
-  Eye
+  Eye,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { PRIORITY_MAP, STATUS_MAP, formatThaiDate } from '../utils/format';
 import { ImageLightboxModal, PdfViewerModal } from './FilePreviewModal';
@@ -44,20 +46,46 @@ export default function TaskBoard({
   const [filterPriority, setFilterPriority] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Banner height state & live adjustment for Super Admin
+  // Banner adjustment states for Super Admin (Height, Fit, and Vertical Position)
   const parsedBannerHeight = parseInt(branding?.bannerHeight) || 170;
   const [bannerHeight, setBannerHeight] = useState(parsedBannerHeight);
+  const [bannerFit, setBannerFit] = useState(branding?.bannerFit || 'cover');
+  const [bannerPosition, setBannerPosition] = useState(
+    branding?.bannerPosition !== undefined ? parseInt(branding.bannerPosition) : 50
+  );
   const [showHeightSettings, setShowHeightSettings] = useState(false);
   const [isSavingHeight, setIsSavingHeight] = useState(false);
 
   useEffect(() => {
     if (branding?.bannerHeight) {
       const parsed = parseInt(branding.bannerHeight);
-      if (!isNaN(parsed) && parsed >= 100) {
-        setBannerHeight(parsed);
-      }
+      if (!isNaN(parsed) && parsed >= 100) setBannerHeight(parsed);
     }
-  }, [branding?.bannerHeight]);
+    if (branding?.bannerFit) setBannerFit(branding.bannerFit);
+    if (branding?.bannerPosition !== undefined) {
+      const pos = parseInt(branding.bannerPosition);
+      if (!isNaN(pos)) setBannerPosition(pos);
+    }
+  }, [branding?.bannerHeight, branding?.bannerFit, branding?.bannerPosition]);
+
+  // Card active image index map for multi-image sliders on task cards
+  const [cardImageIdxMap, setCardImageIdxMap] = useState({});
+
+  const handleNextCardImage = (taskId, totalImages, e) => {
+    e.stopPropagation();
+    setCardImageIdxMap(prev => {
+      const cur = prev[taskId] || 0;
+      return { ...prev, [taskId]: (cur + 1) % totalImages };
+    });
+  };
+
+  const handlePrevCardImage = (taskId, totalImages, e) => {
+    e.stopPropagation();
+    setCardImageIdxMap(prev => {
+      const cur = prev[taskId] || 0;
+      return { ...prev, [taskId]: (cur - 1 + totalImages) % totalImages };
+    });
+  };
 
   // Image & PDF preview modals on the board
   const [boardImagePreview, setBoardImagePreview] = useState(null);
@@ -108,14 +136,19 @@ export default function TaskBoard({
       <div className="relative overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white">
         {branding?.coverImage ? (
           <div 
-            className="relative bg-slate-900 flex items-end transition-all duration-200"
+            className="relative bg-slate-900 flex items-end transition-all duration-200 overflow-hidden"
             style={{ minHeight: `${bannerHeight}px`, height: `${bannerHeight}px` }}
           >
-            {/* Cover Banner Image */}
+            {/* Cover Banner Image with dynamic Fit and Vertical Position */}
             <img
               src={branding.coverImage}
               alt="Cover Banner"
-              className="absolute inset-0 w-full h-full object-cover object-center"
+              className={`absolute inset-0 w-full h-full transition-all duration-200 ${
+                bannerFit === 'contain' ? 'object-contain' : 'object-cover'
+              }`}
+              style={{
+                objectPosition: `50% ${bannerPosition}%`
+              }}
             />
             {/* Dark gradient overlay for crystal-clear readability */}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-900/65 to-slate-950/30" />
@@ -154,68 +187,121 @@ export default function TaskBoard({
                     <button
                       type="button"
                       onClick={() => setShowHeightSettings(prev => !prev)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/50 hover:bg-black/70 text-white text-xs font-semibold backdrop-blur-md border border-white/25 shadow-md transition"
-                      title="ปรับลดหรือขยายขนาดรูปหน้าปก (เฉพาะผู้ควบคุมระบบสูงสุด)"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/60 hover:bg-black/80 text-white text-xs font-semibold backdrop-blur-md border border-white/30 shadow-lg transition"
+                      title="ปรับลดหรือขยายขนาดรูปหน้าปก และจัดตำแหน่งภาพ (เฉพาะผู้ควบคุมระบบสูงสุด)"
                     >
                       <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="hidden sm:inline">ปรับขนาดหน้าปก</span>
+                      <span className="hidden sm:inline">ปรับแต่งหน้าปก</span>
                       <span className="text-[11px] text-amber-300 font-mono">({bannerHeight}px)</span>
                     </button>
 
                     {showHeightSettings && (
-                      <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-4 z-40 text-white animate-fadeIn">
-                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                      <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-slate-900/98 backdrop-blur-2xl border border-slate-700/90 rounded-2xl shadow-2xl p-4 z-40 text-white animate-fadeIn space-y-3.5">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
                             <Sliders className="w-4 h-4" />
-                            <span>ปรับความสูงรูปหน้าปก</span>
+                            <span>ปรับแต่งขนาดและจัดตำแหน่งรูปหน้าปก</span>
                           </div>
                           <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 font-medium">
                             👑 Super Admin
                           </span>
                         </div>
 
-                        {/* Quick Presets */}
-                        <div className="text-[11px] text-slate-300 font-medium mb-1.5">ขนาดมาตรฐาน:</div>
-                        <div className="grid grid-cols-3 gap-1.5 mb-3">
-                          <button
-                            type="button"
-                            onClick={() => setBannerHeight(130)}
-                            className={`px-2 py-1.5 text-xs rounded-lg border font-medium transition ${
-                              bannerHeight === 130 
-                                ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
-                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                            }`}
-                          >
-                            กะทัดรัด (130)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setBannerHeight(180)}
-                            className={`px-2 py-1.5 text-xs rounded-lg border font-medium transition ${
-                              bannerHeight === 180 
-                                ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
-                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                            }`}
-                          >
-                            มาตรฐาน (180)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setBannerHeight(280)}
-                            className={`px-2 py-1.5 text-xs rounded-lg border font-medium transition ${
-                              bannerHeight === 280 
-                                ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
-                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                            }`}
-                          >
-                            ขยายใหญ่ (280)
-                          </button>
+                        {/* 1. Fit Mode Toggle (Cover vs Contain) */}
+                        <div>
+                          <div className="text-[11px] text-slate-300 font-medium mb-1.5">รูปแบบการแสดงภาพ:</div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setBannerFit('cover')}
+                              className={`px-2.5 py-1.5 text-xs rounded-xl border font-medium transition ${
+                                bannerFit === 'cover'
+                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                              }`}
+                            >
+                              🖼️ เต็มกรอบ (Cover)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBannerFit('contain')}
+                              className={`px-2.5 py-1.5 text-xs rounded-xl border font-medium transition ${
+                                bannerFit === 'contain'
+                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                              }`}
+                            >
+                              🔍 เห็นภาพเต็มใบ (Contain)
+                            </button>
+                          </div>
                         </div>
 
-                        {/* Custom Slider */}
-                        <div className="mb-4">
+                        {/* 2. Vertical Position Slider (ดึงภาพลงมา / เลื่อนขึ้น-ลง) */}
+                        <div>
                           <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
-                            <span>เลื่อนปรับความสูง:</span>
+                            <span>ดึงภาพขึ้น-ลง (ตำแหน่งภาพ):</span>
+                            <span className="font-mono font-bold text-amber-400">{bannerPosition}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="2"
+                            value={bannerPosition}
+                            onChange={(e) => setBannerPosition(Number(e.target.value))}
+                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                            <span>0% (บนสุด)</span>
+                            <span className="text-amber-300/80">เลื่อนดึงภาพลงมา</span>
+                            <span>100% (ล่างสุด)</span>
+                          </div>
+                        </div>
+
+                        {/* 3. Quick Height Presets */}
+                        <div>
+                          <div className="text-[11px] text-slate-300 font-medium mb-1.5">ขนาดความสูงมาตรฐาน:</div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setBannerHeight(130)}
+                              className={`px-2 py-1.5 text-xs rounded-lg border font-medium transition ${
+                                bannerHeight === 130 
+                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                              }`}
+                            >
+                              กะทัดรัด (130)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBannerHeight(180)}
+                              className={`px-2 py-1.5 text-xs rounded-lg border font-medium transition ${
+                                bannerHeight === 180 
+                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                              }`}
+                            >
+                              มาตรฐาน (180)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBannerHeight(280)}
+                              className={`px-2 py-1.5 text-xs rounded-lg border font-medium transition ${
+                                bannerHeight === 280 
+                                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold' 
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                              }`}
+                            >
+                              ขยายใหญ่ (280)
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* 4. Fine Height Slider */}
+                        <div>
+                          <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
+                            <span>เลื่อนปรับความสูงละเอียด:</span>
                             <span className="font-mono font-bold text-amber-400">{bannerHeight} px</span>
                           </div>
                           <input
@@ -239,6 +325,8 @@ export default function TaskBoard({
                             type="button"
                             onClick={() => {
                               setBannerHeight(parsedBannerHeight);
+                              setBannerFit(branding?.bannerFit || 'cover');
+                              setBannerPosition(branding?.bannerPosition !== undefined ? parseInt(branding.bannerPosition) : 50);
                               setShowHeightSettings(false);
                             }}
                             className="px-3 py-1.5 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
@@ -252,7 +340,11 @@ export default function TaskBoard({
                               setIsSavingHeight(true);
                               try {
                                 if (onSaveBranding) {
-                                  await onSaveBranding({ bannerHeight: `${bannerHeight}px` });
+                                  await onSaveBranding({ 
+                                    bannerHeight: `${bannerHeight}px`,
+                                    bannerFit,
+                                    bannerPosition: `${bannerPosition}%`
+                                  });
                                 }
                                 setShowHeightSettings(false);
                               } finally {
@@ -261,7 +353,7 @@ export default function TaskBoard({
                             }}
                             className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md transition disabled:opacity-50"
                           >
-                            {isSavingHeight ? 'กำลังบันทึก...' : 'บันทึกขนาด'}
+                            {isSavingHeight ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่าหน้าปก'}
                           </button>
                         </div>
                       </div>
@@ -444,52 +536,108 @@ export default function TaskBoard({
                           )}
                         </div>
 
-                        {/* Attachments preview thumbnail strip on the card */}
-                        {task.attachments && task.attachments.length > 0 && (
-                          <div className="pt-2 border-t border-slate-100 mb-3">
-                            <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold mb-1.5">
-                              <span className="flex items-center gap-1 text-slate-600">
-                                <Paperclip className="w-3.5 h-3.5 text-orange-500" />
-                                <span>ไฟล์แนบ ({task.attachments.length})</span>
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                              {task.attachments.map((att, attIdx) => (
-                                att.isPdf ? (
+                        {/* Attachments Showcase & Slider on the card */}
+                        {task.attachments && task.attachments.length > 0 && (() => {
+                          const imageFiles = task.attachments.filter(a => !a.isPdf);
+                          const pdfFiles = task.attachments.filter(a => a.isPdf);
+                          const curIdx = cardImageIdxMap[task.id] || 0;
+                          const safeIdx = imageFiles.length > 0 ? Math.min(curIdx, imageFiles.length - 1) : 0;
+                          const activeImage = imageFiles[safeIdx];
+
+                          return (
+                            <div className="pt-2 border-t border-slate-100 mb-3 space-y-2">
+                              {/* If has images: Large Preview Card with Slider */}
+                              {imageFiles.length > 0 && activeImage && (
+                                <div className="relative w-full h-44 sm:h-48 bg-slate-950 rounded-xl overflow-hidden shadow-inner group/slider select-none border border-slate-200">
+                                  <img
+                                    src={activeImage.url}
+                                    alt={activeImage.name}
+                                    className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-300"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setBoardImagePreview(activeImage);
+                                    }}
+                                  />
+
+                                  {/* Badge count */}
+                                  <div className="absolute top-2 left-2 pointer-events-none">
+                                    <span className="text-[10px] bg-black/65 backdrop-blur-md px-2 py-0.5 rounded-full text-white font-medium border border-white/20">
+                                      📷 {safeIdx + 1}/{imageFiles.length}
+                                    </span>
+                                  </div>
+
+                                  {/* Maximize button */}
                                   <button
-                                    key={att.id || attIdx}
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setBoardPdfPreview(att);
+                                      setBoardImagePreview(activeImage);
                                     }}
-                                    className="flex items-center gap-1 px-2 py-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg text-[10px] font-semibold shrink-0 transition"
-                                    title={`คลิกเปิดดู PDF: ${att.name}`}
+                                    className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-lg text-white backdrop-blur-md border border-white/20 transition opacity-0 group-hover/slider:opacity-100"
+                                    title="ดูภาพขยายเต็มจอ"
                                   >
-                                    <FileText className="w-3 h-3 text-red-500" />
-                                    <span className="max-w-[80px] truncate">{att.name}</span>
+                                    <Maximize2 className="w-3.5 h-3.5" />
                                   </button>
-                                ) : (
-                                  <button
-                                    key={att.id || attIdx}
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setBoardImagePreview(att);
-                                    }}
-                                    className="relative w-10 h-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 hover:opacity-85 transition shadow-xs group/img"
-                                    title={`คลิกดูรูปขยาย: ${att.name}`}
-                                  >
-                                    <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity">
-                                      <Maximize2 className="w-3.5 h-3.5 text-white" />
-                                    </div>
-                                  </button>
-                                )
-                              ))}
+
+                                  {/* Prev / Next Slider Arrows (shown if > 1 image) */}
+                                  {imageFiles.length > 1 && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => handlePrevCardImage(task.id, imageFiles.length, e)}
+                                        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/85 text-white flex items-center justify-center transition opacity-0 group-hover/slider:opacity-100 shadow border border-white/20"
+                                        title="ภาพก่อนหน้า"
+                                      >
+                                        <ChevronLeft className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => handleNextCardImage(task.id, imageFiles.length, e)}
+                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/85 text-white flex items-center justify-center transition opacity-0 group-hover/slider:opacity-100 shadow border border-white/20"
+                                        title="ภาพถัดไป"
+                                      >
+                                        <ChevronRight className="w-4 h-4" />
+                                      </button>
+
+                                      {/* Indicator dots */}
+                                      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1 pointer-events-none">
+                                        {imageFiles.map((_, dotIdx) => (
+                                          <span
+                                            key={dotIdx}
+                                            className={`w-1.5 h-1.5 rounded-full transition-all ${
+                                              dotIdx === safeIdx ? 'bg-amber-400 w-3.5' : 'bg-white/60'
+                                            }`}
+                                          />
+                                        ))}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* PDF files preview buttons */}
+                              {pdfFiles.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                  {pdfFiles.map((pdf, pIdx) => (
+                                    <button
+                                      key={pdf.id || pIdx}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setBoardPdfPreview(pdf);
+                                      }}
+                                      className="flex items-center gap-1 px-2 py-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg text-[10px] font-semibold transition truncate max-w-full"
+                                      title={`คลิกเปิดอ่านไฟล์ PDF: ${pdf.name}`}
+                                    >
+                                      <FileText className="w-3 h-3 text-red-500 shrink-0" />
+                                      <span className="truncate max-w-[140px]">{pdf.name}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* Attached Materials / Requisitions */}
                         {task.materials && task.materials.length > 0 && (

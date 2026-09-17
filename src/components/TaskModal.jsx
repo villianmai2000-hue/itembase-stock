@@ -11,9 +11,12 @@ import {
   Upload,
   Eye,
   FileText,
-  Maximize2
+  Maximize2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { ImageLightboxModal, PdfViewerModal } from './FilePreviewModal';
+import { compressImageFile } from '../utils/imageCompressor';
 
 export default function TaskModal({ 
   isOpen, 
@@ -34,6 +37,8 @@ export default function TaskModal({
   const [previewImage, setPreviewImage] = useState(null);
   const [previewPdf, setPreviewPdf] = useState(null);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -59,6 +64,8 @@ export default function TaskModal({
       setMaterials([]);
       setAttachments([]);
     }
+    setActiveImageIdx(0);
+    setIsSubmitting(false);
     setError('');
   }, [taskToEdit, isOpen, teamMembers]);
 
@@ -67,27 +74,25 @@ export default function TaskModal({
     if (files.length === 0) return;
     setIsUploadingFiles(true);
     try {
-      const newAttachments = await Promise.all(files.map(file => {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-            resolve({
-              id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-              name: file.name,
-              type: isPdf ? 'application/pdf' : (file.type || 'image/jpeg'),
-              size: file.size,
-              isPdf,
-              url: event.target.result,
-              uploadedAt: new Date().toISOString()
-            });
-          };
-          reader.readAsDataURL(file);
-        });
-      }));
+      const newAttachments = [];
+      for (const file of files) {
+        const compressed = await compressImageFile(file);
+        if (compressed) {
+          newAttachments.push({
+            id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+            name: compressed.name,
+            type: compressed.type,
+            size: compressed.size,
+            isPdf: compressed.isPdf,
+            url: compressed.url,
+            uploadedAt: new Date().toISOString()
+          });
+        }
+      }
       setAttachments(prev => [...prev, ...newAttachments]);
     } catch (err) {
-      console.error('Failed to read files:', err);
+      console.error('Failed to process files:', err);
+      setError('เกิดข้อผิดพลาดในการโหลดไฟล์รูปภาพหรือ PDF');
     } finally {
       setIsUploadingFiles(false);
       e.target.value = '';
@@ -96,6 +101,7 @@ export default function TaskModal({
 
   const handleRemoveAttachment = (index) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
+    setActiveImageIdx(0);
   };
 
   if (!isOpen) return null;
@@ -138,8 +144,9 @@ export default function TaskModal({
     setMaterials(materials.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return; // Prevent double submission!
     if (!title.trim()) {
       setError('กรุณากรอกชื่องาน');
       return;
@@ -149,17 +156,25 @@ export default function TaskModal({
       return;
     }
 
-    onSave({
-      id: taskToEdit ? taskToEdit.id : undefined,
-      title: title.trim(),
-      description: description.trim(),
-      status,
-      priority,
-      assignee,
-      dueDate,
-      materials,
-      attachments
-    });
+    setIsSubmitting(true);
+    setError('');
+    try {
+      await onSave({
+        id: taskToEdit ? taskToEdit.id : undefined,
+        title: title.trim(),
+        description: description.trim(),
+        status,
+        priority,
+        assignee,
+        dueDate,
+        materials,
+        attachments
+      });
+    } catch (err) {
+      console.error('Task save error:', err);
+      setError(err.message || 'บันทึกงานไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -292,12 +307,12 @@ export default function TaskModal({
             </div>
           </div>
 
-          {/* Attachments Section (Images & PDFs) */}
-          <div className="border-t border-slate-200 pt-4">
-            <div className="flex items-center justify-between mb-2">
+          {/* Attachments Section (Large Image Gallery & PDFs) */}
+          <div className="border-t border-slate-200 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <Paperclip className="w-4 h-4 text-orange-500" />
-                <span>รูปภาพและเอกสารแนบ / แบบแปลน PDF ({attachments.length})</span>
+                <span>ภาพผลงานและเอกสารแนบ / แบบแปลน PDF ({attachments.length})</span>
               </label>
               <div>
                 <input
@@ -310,75 +325,175 @@ export default function TaskModal({
                 />
                 <label
                   htmlFor="task-file-input"
-                  className="cursor-pointer text-xs text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-lg border border-orange-200 transition"
+                  className={`cursor-pointer text-xs text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-xl border border-orange-200 transition ${isUploadingFiles ? 'opacity-50 pointer-events-none' : ''}`}
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  <span>{isUploadingFiles ? 'กำลังประมวลผล...' : '+ เพิ่มรูปภาพ / PDF'}</span>
+                  <span>{isUploadingFiles ? 'กำลังบีบอัดและอัปโหลด...' : '+ เพิ่มรูปภาพ / PDF'}</span>
                 </label>
               </div>
             </div>
 
             {attachments.length === 0 ? (
-              <p className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
-                ยังไม่มีรูปภาพหรือไฟล์แนบ (รองรับภาพทุกนามสกุล และไฟล์ PDF หลายไฟล์ พร้อมระบบกดดูภาพขยายและเปิดอ่าน PDF ได้ทันที)
-              </p>
+              <div className="text-center py-5 px-3 bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-xs text-slate-400 space-y-1">
+                <p className="font-medium text-slate-500">ยังไม่มีรูปภาพหรือเอกสารแนบ</p>
+                <p className="text-[11px]">รองรับไฟล์ภาพทุกสกุล และเอกสาร PDF (มีระบบบีบอัดภาพอัตโนมัติ รวดเร็ว ไม่ค้าง)</p>
+              </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-52 overflow-y-auto pr-1">
-                {attachments.map((file, idx) => (
-                  <div 
-                    key={file.id || idx} 
-                    className="group relative bg-slate-50 rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow transition flex flex-col"
-                  >
-                    {file.isPdf ? (
-                      <div 
-                        onClick={() => setPreviewPdf(file)}
-                        className="p-3 flex flex-col items-center justify-center flex-1 min-h-[90px] bg-red-50/40 cursor-pointer hover:bg-red-50 transition"
-                      >
-                        <FileText className="w-7 h-7 text-red-500 mb-1" />
-                        <span className="text-[11px] font-medium text-slate-700 text-center truncate w-full px-1">
-                          {file.name}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {file.size ? (file.size / 1024).toFixed(0) + ' KB' : 'เอกสาร PDF'}
-                        </span>
-                      </div>
-                    ) : (
-                      <div 
-                        onClick={() => setPreviewImage(file)}
-                        className="relative h-24 w-full bg-slate-100 overflow-hidden cursor-pointer"
-                      >
-                        <img 
-                          src={file.url} 
-                          alt={file.name} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
+              <div className="space-y-3">
+                {/* 1. Large Image Showcase with Slide Arrows */}
+                {(() => {
+                  const imageFiles = attachments.filter(a => !a.isPdf);
+                  if (imageFiles.length === 0) return null;
+                  const safeIdx = Math.min(activeImageIdx, Math.max(0, imageFiles.length - 1));
+                  const activeImg = imageFiles[safeIdx];
+
+                  return (
+                    <div className="space-y-2">
+                      <div className="relative w-full h-64 sm:h-72 bg-slate-950 rounded-2xl overflow-hidden shadow-inner flex items-center justify-center group select-none border border-slate-800">
+                        {/* Main Featured Image */}
+                        <img
+                          src={activeImg.url}
+                          alt={activeImg.name}
+                          className="w-full h-full object-contain cursor-pointer transition-transform duration-200"
+                          onClick={() => setPreviewImage(activeImg)}
                         />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                          <Maximize2 className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+
+                        {/* Top Controls Bar */}
+                        <div className="absolute top-2.5 left-3 right-3 flex items-center justify-between pointer-events-auto">
+                          <span className="text-xs bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-white font-medium border border-white/20">
+                            📷 รูปที่ {safeIdx + 1} จากทั้งหมด {imageFiles.length} รูป
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage(activeImg)}
+                              className="px-2.5 py-1 bg-black/60 hover:bg-black/80 rounded-lg text-white text-xs backdrop-blur-md border border-white/20 flex items-center gap-1 transition shadow"
+                              title="ขยายดูภาพขนาดเต็ม"
+                            >
+                              <Maximize2 className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">ดูภาพขยาย</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const targetIdx = attachments.findIndex(a => a.id === activeImg.id);
+                                if (targetIdx !== -1) handleRemoveAttachment(targetIdx);
+                              }}
+                              className="p-1.5 bg-red-600/80 hover:bg-red-600 rounded-lg text-white backdrop-blur-md transition shadow"
+                              title="ลบรูปนี้"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Left / Right Slide Navigation Buttons */}
+                        {imageFiles.length > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveImageIdx(prev => (prev > 0 ? prev - 1 : imageFiles.length - 1));
+                              }}
+                              className="absolute left-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-sm shadow-xl transition transform active:scale-90"
+                              title="รูปก่อนหน้า (กดเลื่อนเพื่อดูผลงาน)"
+                            >
+                              <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveImageIdx(prev => (prev < imageFiles.length - 1 ? prev + 1 : 0));
+                              }}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-sm shadow-xl transition transform active:scale-90"
+                              title="รูปถัดไป (กดเลื่อนเพื่อดูผลงาน)"
+                            >
+                              <ChevronRight className="w-5 h-5" />
+                            </button>
+                          </>
+                        )}
+
+                        {/* Bottom Bar: Title & Size */}
+                        <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-xs pointer-events-none">
+                          <span className="truncate max-w-[70%] font-medium drop-shadow bg-black/40 px-2 py-0.5 rounded backdrop-blur-xs">
+                            {activeImg.name}
+                          </span>
+                          <span className="text-[11px] text-slate-300 drop-shadow bg-black/40 px-2 py-0.5 rounded backdrop-blur-xs">
+                            {activeImg.size ? (activeImg.size / 1024).toFixed(0) + ' KB' : ''} • คลิกเพื่อซูม
+                          </span>
                         </div>
                       </div>
-                    )}
 
-                    <div className="p-1.5 bg-white border-t border-slate-100 flex items-center justify-between text-xs">
-                      <button
-                        type="button"
-                        onClick={() => file.isPdf ? setPreviewPdf(file) : setPreviewImage(file)}
-                        className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 px-1.5 py-0.5 rounded transition"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>{file.isPdf ? 'เปิดดู PDF' : 'ดูรูปขยาย'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAttachment(idx)}
-                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
-                        title="ลบไฟล์"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {/* Sequential Thumbnail Strip */}
+                      {imageFiles.length > 1 && (
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 px-0.5">
+                          {imageFiles.map((img, idx) => (
+                            <button
+                              key={img.id || idx}
+                              type="button"
+                              onClick={() => setActiveImageIdx(idx)}
+                              className={`relative w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition ${
+                                idx === safeIdx ? 'border-orange-500 ring-2 ring-orange-400/50 scale-105 shadow-md' : 'border-slate-200 opacity-60 hover:opacity-100'
+                              }`}
+                            >
+                              <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })()}
+
+                {/* 2. PDF Files List */}
+                {(() => {
+                  const pdfFiles = attachments.filter(a => a.isPdf);
+                  if (pdfFiles.length === 0) return null;
+
+                  return (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-red-500" />
+                        <span>เอกสารแบบแปลน PDF ({pdfFiles.length})</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {pdfFiles.map((pdf) => (
+                          <div key={pdf.id} className="flex items-center justify-between p-2.5 bg-red-50/60 border border-red-200 rounded-xl text-xs">
+                            <div className="flex items-center gap-2 truncate pr-2">
+                              <FileText className="w-5 h-5 text-red-500 shrink-0" />
+                              <div className="truncate">
+                                <p className="font-semibold text-slate-800 truncate">{pdf.name}</p>
+                                <p className="text-[10px] text-slate-400">{pdf.size ? (pdf.size / 1024).toFixed(0) + ' KB' : 'เอกสาร PDF'}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewPdf(pdf)}
+                                className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg text-[11px] transition shadow-xs"
+                              >
+                                เปิดอ่าน PDF
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const targetIdx = attachments.findIndex(a => a.id === pdf.id);
+                                  if (targetIdx !== -1) handleRemoveAttachment(targetIdx);
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-600 rounded transition"
+                                title="ลบไฟล์"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -463,15 +578,24 @@ export default function TaskModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition"
+              disabled={isSubmitting}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition disabled:opacity-50"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white rounded-lg shadow-md shadow-orange-600/20 transition"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white rounded-lg shadow-md shadow-orange-600/20 transition disabled:opacity-50 flex items-center gap-2"
             >
-              {taskToEdit ? 'บันทึกการแก้ไข' : 'สร้างงาน'}
+              {isSubmitting ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>กำลังบันทึกข้อมูล...</span>
+                </>
+              ) : (
+                <span>{taskToEdit ? 'บันทึกการแก้ไข' : 'สร้างงาน'}</span>
+              )}
             </button>
           </div>
 

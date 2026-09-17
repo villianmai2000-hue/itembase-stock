@@ -53,7 +53,7 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 }
 app.use('/uploads', express.static(UPLOAD_DIR));
 
-// Configure multer for file uploads
+// Configure multer for file uploads with 50MB field and file limit
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, UPLOAD_DIR);
@@ -64,7 +64,13 @@ const storage = multer.diskStorage({
     cb(null, 'item-' + uniqueSuffix + ext);
   }
 });
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+    fieldSize: 50 * 1024 * 1024
+  }
+});
 
 // multer middlewares
 const uploadSingle = upload.single('imageFile');         // legacy single
@@ -1701,6 +1707,8 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
     profileImageUrl, 
     coverImageUrl,
     bannerHeight,
+    bannerFit,
+    bannerPosition,
     phone,
     recoveryPhone,
     email,
@@ -1729,6 +1737,8 @@ app.put('/api/settings/branding', uploadAny, (req, res) => {
   db.branding = db.branding || {};
   if (siteTitle !== undefined) db.branding.siteTitle = siteTitle.trim() || 'ItemBase';
   if (bannerHeight !== undefined) db.branding.bannerHeight = bannerHeight;
+  if (bannerFit !== undefined) db.branding.bannerFit = bannerFit;
+  if (bannerPosition !== undefined) db.branding.bannerPosition = bannerPosition;
   if (files.profileImage) db.branding.profileImage = files.profileImage;
   else if (profileImageUrl !== undefined) db.branding.profileImage = profileImageUrl;
   if (files.coverImage) db.branding.coverImage = files.coverImage;
@@ -1943,6 +1953,26 @@ app.get('/api/tunnel-info', async (req, res) => {
   });
 });
 
+
+// Global API 404 handler for unmatched /api routes
+app.use('/api', (req, res) => {
+  res.status(404).json({ success: false, error: `ไม่พบ API endpoint: ${req.method} ${req.originalUrl}` });
+});
+
+// Global Express Error Handler Middleware (Guarantees JSON response, NEVER HTML <!DOCTYPE>)
+app.use((err, req, res, next) => {
+  console.error('[Express Error Handler]', err && (err.message || err));
+  const status = (typeof err.status === 'number' && err.status >= 400 && err.status < 600) 
+    ? err.status 
+    : (typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600)
+      ? err.statusCode 
+      : 500;
+  
+  res.status(status).json({
+    success: false,
+    error: err.message || 'เกิดข้อผิดพลาดในการประมวลผลบนเซิร์ฟเวอร์'
+  });
+});
 
 // Start Server
 app.listen(PORT, '0.0.0.0', async () => {

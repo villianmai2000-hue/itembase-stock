@@ -28,6 +28,7 @@ import {
   Image as ImageIcon,
   Camera
 } from 'lucide-react';
+import { compressImageFile } from '../utils/imageCompressor';
 
 export default function SettingsPage({ 
   teamMembers = [], 
@@ -210,6 +211,7 @@ export default function SettingsPage({
           if (result.adminProfile.email) setSecEmail(result.adminProfile.email);
           if (result.adminProfile.securityPin) setSecPin(result.adminProfile.securityPin);
         }
+        await fetchSecurityProfile();
       }
 
       setSecSaveMessage('✅ บันทึกการตั้งค่าเว็บไซต์และผูกบัญชีความปลอดภัยเรียบร้อยแล้ว!');
@@ -1256,11 +1258,22 @@ export default function SettingsPage({
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={e => {
+                        onChange={async (e) => {
                           const f = e.target.files[0];
                           if (f) {
-                            setProfileImageFile(f);
-                            setProfilePreview(URL.createObjectURL(f));
+                            try {
+                              const compressed = await compressImageFile(f, 800, 800, 0.85);
+                              if (compressed && compressed.url) {
+                                setProfileImageFile(null);
+                                setProfilePreview(compressed.url);
+                              } else {
+                                setProfileImageFile(f);
+                                setProfilePreview(URL.createObjectURL(f));
+                              }
+                            } catch {
+                              setProfileImageFile(f);
+                              setProfilePreview(URL.createObjectURL(f));
+                            }
                           }
                         }}
                       />
@@ -1318,11 +1331,22 @@ export default function SettingsPage({
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={e => {
+                        onChange={async (e) => {
                           const f = e.target.files[0];
                           if (f) {
-                            setCoverImageFile(f);
-                            setCoverPreview(URL.createObjectURL(f));
+                            try {
+                              const compressed = await compressImageFile(f, 1920, 1080, 0.82);
+                              if (compressed && compressed.url) {
+                                setCoverImageFile(null);
+                                setCoverPreview(compressed.url);
+                              } else {
+                                setCoverImageFile(f);
+                                setCoverPreview(URL.createObjectURL(f));
+                              }
+                            } catch {
+                              setCoverImageFile(f);
+                              setCoverPreview(URL.createObjectURL(f));
+                            }
                           }
                         }}
                       />
@@ -1455,6 +1479,39 @@ export default function SettingsPage({
                 <p className="text-[10px] text-slate-400 mt-1">รหัส PIN ฉุกเฉินสำหรับยืนยันสิทธิ์ผู้ควบคุมระบบ</p>
               </div>
             </div>
+
+            {/* Direct Save Button & Feedback for Account Recovery Binding */}
+            <div className="pt-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>บันทึกและผูกเบอร์โทรศัพท์/อีเมลนี้ทันที เพื่อใช้รับรหัส OTP กู้คืนรหัสผ่าน</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveAllBrandingAndSecurity}
+                disabled={secLoading}
+                className="w-full sm:w-auto bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-xs py-2.5 px-5 rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {secLoading ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>กำลังบันทึกข้อมูลผูกบัญชี...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>💾 บันทึกข้อมูลผูกบัญชี OTP (ข้อ 3)</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {secSaveMessage && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 animate-fadeIn font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{secSaveMessage}</span>
+              </div>
+            )}
           </div>
 
           {/* ========================================================= */}
