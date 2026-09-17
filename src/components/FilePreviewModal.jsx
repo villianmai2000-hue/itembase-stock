@@ -293,9 +293,13 @@ export function ImageLightboxModal({
 }
 
 /**
- * PdfViewerModal: Embedded PDF Viewer Modal with Open in New Tab & Download
+ * PdfViewerModal: Embedded PDF Viewer Modal with Open in New Tab, Google Docs Fallback & Download
  */
 export function PdfViewerModal({ isOpen, pdf, onClose }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [isBlobLoading, setIsBlobLoading] = useState(false);
+  const [viewMode, setViewMode] = useState('native'); // 'native' | 'google'
+
   useEffect(() => {
     if (isOpen) {
       const handleKeyDown = (e) => {
@@ -306,65 +310,134 @@ export function PdfViewerModal({ isOpen, pdf, onClose }) {
     }
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    let createdUrl = null;
+    if (isOpen && pdf) {
+      setViewMode('native');
+      const rawUrl = pdf.url || (typeof pdf === 'string' ? pdf : '');
+
+      if (rawUrl && rawUrl.startsWith('data:')) {
+        setIsBlobLoading(true);
+        try {
+          const parts = rawUrl.split(',');
+          const mimeMatch = parts[0].match(/:(.*?);/);
+          const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+          const bstr = atob(parts[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          const blob = new Blob([u8arr], { type: mime });
+          createdUrl = URL.createObjectURL(blob);
+          setBlobUrl(createdUrl);
+        } catch (err) {
+          console.error('Error converting data URL to blob:', err);
+          setBlobUrl(rawUrl);
+        } finally {
+          setIsBlobLoading(false);
+        }
+      } else {
+        setBlobUrl(rawUrl);
+      }
+    } else {
+      setBlobUrl(null);
+    }
+
+    return () => {
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [isOpen, pdf]);
+
   if (!isOpen || !pdf) return null;
 
-  const pdfUrl = pdf.url || (typeof pdf === 'string' ? pdf : '');
   const pdfName = pdf.name || 'เอกสารประกอบงาน.pdf';
+  const activePdfUrl = blobUrl || pdf.url || '';
+
+  // Check if we can construct an online Google Docs Viewer URL
+  const isHttpUrl = activePdfUrl.startsWith('http://') || activePdfUrl.startsWith('https://');
+  const isRelativeUrl = activePdfUrl.startsWith('/');
+  const fullHttpUrl = isHttpUrl 
+    ? activePdfUrl 
+    : (isRelativeUrl && typeof window !== 'undefined' ? `${window.location.origin}${activePdfUrl}` : null);
+  const isOnlineUrl = fullHttpUrl && !fullHttpUrl.includes('localhost') && !fullHttpUrl.includes('127.0.0.1');
+  const googleViewerUrl = isOnlineUrl 
+    ? `https://docs.google.com/viewer?url=${encodeURIComponent(fullHttpUrl)}&embedded=true` 
+    : null;
 
   const handleDownload = () => {
+    if (!activePdfUrl) return;
     const a = document.createElement('a');
-    a.href = pdfUrl;
-    a.download = pdfName;
+    a.href = activePdfUrl;
+    a.download = pdfName.toLowerCase().endsWith('.pdf') ? pdfName : `${pdfName}.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
 
   const handleOpenNewTab = () => {
-    const win = window.open();
-    if (win) {
-      win.document.write(
-        `<title>${pdfName}</title><body style="margin:0;background:#1e293b;"><iframe src="${pdfUrl}" frameborder="0" style="border:0; width:100%; height:100vh;" allowfullscreen></iframe></body>`
-      );
-    } else {
-      window.open(pdfUrl, '_blank');
-    }
+    if (!activePdfUrl) return;
+    window.open(activePdfUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-fadeIn"
+      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-fadeIn select-none"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* Header Bar */}
-        <div className="px-4 sm:px-6 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 text-white">
-          <div className="flex items-center gap-2.5 truncate pr-3">
+        <div className="px-4 sm:px-6 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 text-white">
+          <div className="flex items-center gap-2.5 truncate pr-2">
             <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
               <FileText className="w-4 h-4" />
             </div>
             <div className="truncate">
-              <h3 className="text-sm font-bold text-slate-100 truncate">{pdfName}</h3>
-              <p className="text-[11px] text-slate-400">เปิดดูเอกสาร PDF แบบแปลน / สเปกงาน</p>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-100 truncate">{pdfName}</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30 shrink-0">
+                  PDF
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">เอกสารประกอบงานก่อสร้าง / แบบแปลน</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {googleViewerUrl && (
+              <button
+                type="button"
+                onClick={() => setViewMode(prev => prev === 'native' ? 'google' : 'native')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition border ${
+                  viewMode === 'google'
+                    ? 'bg-blue-600 border-blue-500 text-white'
+                    : 'bg-slate-800 hover:bg-slate-700 text-blue-400 border-slate-700'
+                }`}
+                title="สลับโหมดเปิดดูผ่าน Google Docs Viewer"
+              >
+                <span>🌐</span>
+                <span className="hidden sm:inline">Google Viewer</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleOpenNewTab}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition"
-              title="เปิดในแท็บใหม่ของเบราว์เซอร์"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-bold text-white shadow-md shadow-red-600/30 transition transform active:scale-95"
+              title="เปิดอ่าน PDF ในแท็บใหม่เต็มจอ"
             >
-              <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-              <span className="hidden sm:inline">เปิดแท็บใหม่</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>เปิดอ่านเต็มจอ</span>
             </button>
 
             <button
               type="button"
               onClick={handleDownload}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition border border-slate-700/80"
               title="ดาวน์โหลดไฟล์ PDF"
             >
               <Download className="w-3.5 h-3.5" />
@@ -382,19 +455,89 @@ export function PdfViewerModal({ isOpen, pdf, onClose }) {
           </div>
         </div>
 
-        {/* Embedded PDF iframe */}
-        <div className="flex-1 w-full h-full bg-slate-950/60 relative">
-          <iframe
-            src={pdfUrl}
-            title={pdfName}
-            className="w-full h-full border-0 bg-slate-900"
-          />
+        {/* Main PDF Display Area */}
+        <div className="flex-1 w-full h-full bg-slate-950 relative flex flex-col overflow-hidden">
+          {isBlobLoading ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
+              <div className="w-8 h-8 border-3 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
+              <p className="text-xs">กำลังเตรียมเปิดไฟล์ PDF...</p>
+            </div>
+          ) : viewMode === 'google' && googleViewerUrl ? (
+            <iframe
+              src={googleViewerUrl}
+              title={pdfName}
+              className="w-full h-full border-0 bg-white"
+            />
+          ) : activePdfUrl ? (
+            <object
+              data={`${activePdfUrl}#toolbar=1&navpanes=1`}
+              type="application/pdf"
+              className="w-full h-full border-0 bg-slate-900"
+            >
+              <embed
+                src={`${activePdfUrl}#toolbar=1&navpanes=1`}
+                type="application/pdf"
+                className="w-full h-full"
+              />
+              <iframe
+                src={`${activePdfUrl}#toolbar=1&navpanes=1`}
+                title={pdfName}
+                className="w-full h-full border-0 bg-slate-900"
+              >
+                {/* Fallback card if browser plugin is completely disabled or on mobile */}
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center text-white bg-slate-900">
+                  <div className="w-16 h-16 rounded-2xl bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400 mb-3">
+                    <FileText className="w-8 h-8" />
+                  </div>
+                  <h4 className="text-base font-bold mb-1 text-slate-100">{pdfName}</h4>
+                  <p className="text-xs text-slate-400 max-w-md mb-5 leading-relaxed">
+                    อุปกรณ์หรือเบราว์เซอร์ของคุณพร้อมเปิดไฟล์นี้ คลิกปุ่มด้านล่างเพื่อเปิดอ่าน PDF แบบเต็มจอ หรือดาวน์โหลดเก็บไว้ได้ทันที
+                  </p>
+                  <div className="flex items-center gap-3 flex-wrap justify-center">
+                    <button
+                      type="button"
+                      onClick={handleOpenNewTab}
+                      className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-red-600/30 transition transform active:scale-95"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>เปิดอ่าน PDF เต็มจอ</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs flex items-center gap-2 border border-slate-700 transition"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>ดาวน์โหลดไฟล์ PDF</span>
+                    </button>
+                  </div>
+                </div>
+              </iframe>
+            </object>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-slate-400 text-xs">
+              ไม่พบที่อยู่ของไฟล์ PDF
+            </div>
+          )}
         </div>
 
         {/* Footer info bar */}
-        <div className="px-4 py-2 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-          <span>📄 โปรแกรมเปิดดูไฟล์ PDF</span>
-          <span>หากไฟล์ไม่แสดง สามารถกด <b>"เปิดแท็บใหม่"</b> หรือ <b>"ดาวน์โหลด"</b> ด้านบนได้ทันที</span>
+        <div className="px-4 py-2.5 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-300 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>📄 เอกสาร PDF พร้อมใช้งาน</span>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+            <span>💡 สามารถกดปุ่ม</span>
+            <button
+              type="button"
+              onClick={handleOpenNewTab}
+              className="text-red-400 hover:text-red-300 font-bold underline"
+            >
+              "เปิดอ่านเต็มจอ"
+            </button>
+            <span>เพื่อดูแบบเต็มหน้าต่าง พิมพ์ หรือซูมรายละเอียดได้ทันที</span>
+          </div>
         </div>
 
       </div>

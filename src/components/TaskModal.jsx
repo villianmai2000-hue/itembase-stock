@@ -13,7 +13,8 @@ import {
   FileText,
   Maximize2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ExternalLink
 } from 'lucide-react';
 import { ImageLightboxModal, PdfViewerModal } from './FilePreviewModal';
 import { compressImageFile } from '../utils/imageCompressor';
@@ -460,21 +461,26 @@ export default function TaskModal({
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {pdfFiles.map((pdf) => (
-                          <div key={pdf.id} className="flex items-center justify-between p-2.5 bg-red-50/60 border border-red-200 rounded-xl text-xs">
+                          <div 
+                            key={pdf.id} 
+                            onClick={() => setPreviewPdf(pdf)}
+                            className="flex items-center justify-between p-2.5 bg-red-50/70 hover:bg-red-50 border border-red-200 rounded-xl text-xs transition cursor-pointer group"
+                          >
                             <div className="flex items-center gap-2 truncate pr-2">
-                              <FileText className="w-5 h-5 text-red-500 shrink-0" />
+                              <FileText className="w-5 h-5 text-red-500 shrink-0 group-hover:scale-110 transition-transform" />
                               <div className="truncate">
-                                <p className="font-semibold text-slate-800 truncate">{pdf.name}</p>
+                                <p className="font-semibold text-slate-800 truncate group-hover:text-red-700 transition-colors">{pdf.name}</p>
                                 <p className="text-[10px] text-slate-400">{pdf.size ? (pdf.size / 1024).toFixed(0) + ' KB' : 'เอกสาร PDF'}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
                                 onClick={() => setPreviewPdf(pdf)}
-                                className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg text-[11px] transition shadow-xs"
+                                className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg text-[11px] transition shadow-xs flex items-center gap-1"
                               >
-                                เปิดอ่าน PDF
+                                <ExternalLink className="w-3 h-3" />
+                                <span>เปิดอ่าน PDF</span>
                               </button>
                               <button
                                 type="button"

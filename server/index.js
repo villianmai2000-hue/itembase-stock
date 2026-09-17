@@ -109,7 +109,14 @@ const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
-app.use('/uploads', express.static(UPLOAD_DIR));
+app.use('/uploads', express.static(UPLOAD_DIR, {
+  setHeaders: (res, filePath) => {
+    if (filePath.toLowerCase().endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    }
+  }
+}));
 
 // Configure multer for file uploads with 50MB field and file limit
 const storage = multer.diskStorage({
@@ -137,24 +144,37 @@ const uploadAny    = upload.any();                      // accepts any file fiel
 
 
 
-// Helper to safely write base64 image strings to disk and return static URL (prevents database bloating)
-function saveBase64Image(dataUrl, prefix = 'upload') {
-  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
+// Helper to safely write base64 image or PDF strings to disk and return static URL (prevents database bloating)
+function saveBase64File(dataUrl, prefix = 'upload') {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
     return dataUrl;
   }
   try {
-    const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+    // 1. PDF files
+    if (dataUrl.startsWith('data:application/pdf;base64,')) {
+      const base64Data = dataUrl.replace(/^data:application\/pdf;base64,/, '');
+      const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e9)}.pdf`;
+      const filePath = path.join(UPLOAD_DIR, filename);
+      fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+      console.log(`✅ [Server] บันทึกไฟล์ PDF สำเร็จ: /uploads/${filename}`);
+      return `/uploads/${filename}`;
+    }
+
+    // 2. Image files
+    const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9\+\-\.]+);base64,(.+)$/);
     if (!matches) return dataUrl;
-    const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+    let ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+    if (ext.includes('svg')) ext = 'svg';
     const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
     const filePath = path.join(UPLOAD_DIR, filename);
     fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
     return `/uploads/${filename}`;
   } catch (err) {
-    console.error('Error saving base64 image:', err);
+    console.error('Error saving base64 file:', err);
     return dataUrl;
   }
 }
+const saveBase64Image = saveBase64File;
 
 // Helper to get Thai formatted timestamp
 function getThaiTimestamp() {
