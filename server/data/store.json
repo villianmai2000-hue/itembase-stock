@@ -5,22 +5,25 @@
       "name": "ยุทธการ คำกลอน",
       "role": "ผู้ควบคุมระบบ / เขียนแบบโครงการ",
       "phone": "0643032859",
+      "password": "0962033005Maiiam2000",
       "isAdmin": true,
       "status": "active"
     },
     {
       "id": "TM-10",
-      "name": "สมโภช  สุทินธุ์",
+      "name": "สมโภช สุทินธุ์",
       "role": "ช่างประสานงานและฝ่ายจัดส่งสินค้า",
       "phone": "-",
+      "password": "1234",
       "isAdmin": false,
       "status": "active"
     },
     {
       "id": "TM-04",
-      "name": "นายวีรศักดิ์   อนุพันธ์",
+      "name": "นายวีรศักดิ์ อนุพันธ์",
       "role": "ผู้จัดการโครงการ",
       "phone": "-",
+      "password": "1234",
       "isAdmin": false,
       "status": "active"
     },
@@ -29,14 +32,16 @@
       "name": "Leena",
       "role": "เจ้าหน้าที่นับและตรวจสต็อก",
       "phone": "-",
+      "password": "1234",
       "isAdmin": false,
       "status": "active"
     },
     {
       "id": "TM-06",
-      "name": "คุณอำภาพร  สำลีม่วง",
+      "name": "คุณอำภาพร สำลีม่วง",
       "role": "งานสโตร์",
       "phone": "-",
+      "password": "1234",
       "isAdmin": false,
       "status": "active"
     }

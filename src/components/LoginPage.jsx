@@ -24,9 +24,11 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
 
   const siteTitle = branding?.siteTitle || 'ItemBase';
 
-  // Fetch safe member list if not provided
+  // Fetch safe member list if not provided, and sync when teamMembers changes
   useEffect(() => {
-    if (availableMembers.length === 0) {
+    if (Array.isArray(teamMembers) && teamMembers.length > 0) {
+      setAvailableMembers(teamMembers);
+    } else if (availableMembers.length === 0) {
       fetch('/api/auth/members')
         .then(res => res.json())
         .then(data => {
@@ -34,10 +36,10 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
         })
         .catch(err => console.error('Failed to load members for login:', err));
     }
-  }, []);
+  }, [teamMembers]);
 
   const handleSelectQuickUser = (name) => {
-    setUsername(name);
+    setUsername(name.trim());
     setErrorMessage('');
   };
 
@@ -238,6 +240,17 @@ export default function LoginPage({ onLoginSuccess, teamMembers = [], openMobile
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+
+              {/* Helpful Password Hint for Employees */}
+              {username && (
+                <div className="mt-1.5 text-[11px] text-slate-400 flex items-center gap-1.5">
+                  {username === 'ยุทธการ คำกลอน' ? (
+                    <span className="text-amber-400">👑 ผู้ควบคุมระบบใช้รหัสผ่าน Master Admin</span>
+                  ) : (
+                    <span>💡 รหัสผ่านเริ่มต้นสำหรับพนักงาน: <span className="font-mono text-orange-400 font-bold bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">1234</span> (หรือรหัสที่ผู้ควบคุมระบบกำหนดให้)</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Submit Button */}

@@ -42,7 +42,7 @@ export default function TaskBoard({
 
   // Filter tasks
   const filteredTasks = tasks.filter(t => {
-    if (filterAssignee && t.assignee !== filterAssignee) return false;
+    if (filterAssignee && (t.assignee || '').replace(/\s+/g, ' ').trim() !== filterAssignee.replace(/\s+/g, ' ').trim()) return false;
     if (filterPriority && t.priority !== filterPriority) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();

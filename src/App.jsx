@@ -499,7 +499,22 @@ export default function App() {
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'บันทึกรายชื่อพนักงานไม่สำเร็จ');
-      setTeamMembers(members);
+      const updatedMembers = result.team_members || members;
+      setTeamMembers(updatedMembers);
+
+      // If current logged-in user was renamed, update authUser and currentUser
+      if (authUser) {
+        const myRecord = updatedMembers.find(m => m.id === authUser.id);
+        if (myRecord && myRecord.name !== authUser.name) {
+          const updatedSession = { ...authUser, name: myRecord.name, role: myRecord.role, phone: myRecord.phone };
+          setAuthUser(updatedSession);
+          setCurrentUser(myRecord.name);
+          try { localStorage.setItem('itembase_user', JSON.stringify(updatedSession)); } catch (e) {}
+        }
+      }
+
+      // Reload tasks & settings so cascaded assignee updates reflect in UI
+      loadData(currentUser);
       showToast('บันทึกรายชื่อพนักงานและรหัสผ่านเรียบร้อย');
     } catch (err) {
       showToast(err.message, 'error');

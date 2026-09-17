@@ -128,16 +128,25 @@ export default function SettingsPage({
   const handleAddMember = (e) => {
     e.preventDefault();
     if (!newMemberName.trim()) return;
-    const nextId = `TM-${(membersList.length + 1).toString().padStart(2, '0')}`;
+    const cleanName = newMemberName.replace(/\s+/g, ' ').trim();
+    if (membersList.some(m => (m.name || '').replace(/\s+/g, ' ').trim().toLowerCase() === cleanName.toLowerCase())) {
+      alert(`มีรายชื่อ "${cleanName}" อยู่ในระบบแล้ว`);
+      return;
+    }
+    const maxIdNum = membersList.reduce((max, m) => {
+      const num = parseInt((m.id || '').replace(/\D/g, ''), 10);
+      return !isNaN(num) && num > max ? num : max;
+    }, 0);
+    const nextId = `TM-${(maxIdNum + 1).toString().padStart(2, '0')}`;
     const updated = [
       ...membersList,
       {
         id: nextId,
-        name: newMemberName.trim(),
+        name: cleanName,
         role: newMemberRole.trim() || 'ช่างหน้างาน',
         phone: newMemberPhone.trim() || '-',
         password: newMemberPassword.trim() || '1234',
-        isAdmin: newMemberName.trim() === 'ยุทธการ คำกลอน',
+        isAdmin: cleanName === 'ยุทธการ คำกลอน',
         status: 'active'
       }
     ];
@@ -155,19 +164,24 @@ export default function SettingsPage({
     setEditName(m.name);
     setEditRole(m.role);
     setEditPhone(m.phone);
-    setEditPassword(m.password || (m.name === 'ยุทธการ คำกลอน' ? '0962033005Maiiam2000' : '1234'));
+    setEditPassword(m.password || (m.id === 'TM-01' || m.name === 'ยุทธการ คำกลอน' ? '0962033005Maiiam2000' : '1234'));
   };
 
   const handleSaveEditMember = (id) => {
+    const cleanEditName = editName.replace(/\s+/g, ' ').trim();
+    if (!cleanEditName) {
+      alert('กรุณากรอกชื่อพนักงาน');
+      return;
+    }
     const updated = membersList.map(m => {
       if (m.id === id) {
-        const isSuper = m.name === 'ยุทธการ คำกลอน';
+        const isSuper = m.id === 'TM-01' || m.name === 'ยุทธการ คำกลอน';
         return {
           ...m,
-          name: editName.trim(),
-          role: editRole.trim(),
-          phone: editPhone.trim(),
-          password: isSuper ? '0962033005Maiiam2000' : (editPassword.trim() || '1234')
+          name: cleanEditName,
+          role: editRole.trim() || 'ช่างหน้างาน',
+          phone: editPhone.trim() || '-',
+          password: isSuper ? '0962033005Maiiam2000' : (editPassword.trim() || m.password || '1234')
         };
       }
       return m;
@@ -179,11 +193,16 @@ export default function SettingsPage({
   };
 
   const handleDeleteMember = (id) => {
+    const target = membersList.find(m => m.id === id);
+    if (target && (target.id === 'TM-01' || target.name === 'ยุทธการ คำกลอน')) {
+      alert('ไม่สามารถลบผู้ควบคุมระบบหลัก ยุทธการ คำกลอน ได้');
+      return;
+    }
     if (membersList.length <= 1) {
       alert('ต้องมีรายชื่อสมาชิกในองค์กรอย่างน้อย 1 คน');
       return;
     }
-    if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายชื่อพนักงานนี้ออกจากระบบ?')) {
+    if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายชื่อ "${target?.name}" ออกจากระบบ?`)) {
       const updated = membersList.filter(m => m.id !== id);
       setMembersList(updated);
       onSaveMembers(updated);
@@ -413,7 +432,7 @@ export default function SettingsPage({
                 <tbody className="divide-y divide-slate-200">
                   {membersList.map((m) => {
                     const isEditing = editingMemberId === m.id;
-                    const isSystemAdmin = m.name === "ยุทธการ คำกลอน";
+                    const isSystemAdmin = m.id === 'TM-01' || m.isAdmin || m.name === "ยุทธการ คำกลอน";
                     const currentPass = isSystemAdmin ? '0962033005Maiiam2000' : (m.password || '1234');
 
                     return (

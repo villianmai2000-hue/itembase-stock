@@ -42,15 +42,11 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 // Initial Seed Data
 const defaultSeed = {
   team_members: [
-    { id: "TM-01", name: "ยุทธการ คำกลอน", role: "ผู้ควบคุมระบบ / หัวหน้างาน", phone: "081-234-5678", password: "0962033005Maiiam2000", isAdmin: true, status: "active" },
-    { id: "TM-02", name: "สมชาย ใจดี", role: "หัวหน้าช่างโครงสร้าง", phone: "082-345-6789", password: "1234", isAdmin: false, status: "active" },
-    { id: "TM-03", name: "อนุชา มั่นคง", role: "ช่างเชื่อมและเหล็ก", phone: "083-456-7890", password: "1234", isAdmin: false, status: "active" },
-    { id: "TM-04", name: "วิชาญ รุ่งเรือง", role: "ช่างไฟฟ้าหน้างาน", phone: "084-567-8901", password: "1234", isAdmin: false, status: "active" },
-    { id: "TM-05", name: "ประเสริฐ สุขสม", role: "ช่างปูนและฉาบ", phone: "085-678-9012", password: "1234", isAdmin: false, status: "active" },
-    { id: "TM-06", name: "ธนกร ก่อเกียรติ", role: "ช่างไม้และแบบหล่อ", phone: "086-789-0123", password: "1234", isAdmin: false, status: "active" },
-    { id: "TM-07", name: "มานพ วงศ์วิวัฒน์", role: "ช่างทั่วไป / ตรวจรับของ", phone: "087-890-1234", password: "1234", isAdmin: false, status: "active" },
-    { id: "TM-08", name: "นพพร กล้าหาญ", role: "ผู้ควบคุมความปลอดภัย (จป.)", phone: "088-901-2345", password: "1234", isAdmin: false, status: "active" },
-    { id: "TM-09", name: "ธีรพล พงษ์ศิริ", role: "ฝ่ายประสานงานและจัดซื้อ", phone: "089-012-3456", password: "1234", isAdmin: false, status: "active" }
+    { id: "TM-01", name: "ยุทธการ คำกลอน", role: "ผู้ควบคุมระบบ / เขียนแบบโครงการ", phone: "0643032859", password: "0962033005Maiiam2000", isAdmin: true, status: "active" },
+    { id: "TM-10", name: "สมโภช สุทินธุ์", role: "ช่างประสานงานและฝ่ายจัดส่งสินค้า", phone: "-", password: "1234", isAdmin: false, status: "active" },
+    { id: "TM-04", name: "นายวีรศักดิ์ อนุพันธ์", role: "ผู้จัดการโครงการ", phone: "-", password: "1234", isAdmin: false, status: "active" },
+    { id: "TM-05", name: "Leena", role: "เจ้าหน้าที่นับและตรวจสต็อก", phone: "-", password: "1234", isAdmin: false, status: "active" },
+    { id: "TM-06", name: "คุณอำภาพร สำลีม่วง", role: "งานสโตร์", phone: "-", password: "1234", isAdmin: false, status: "active" }
   ],
   locations: [
     "โกดังใหญ่ ( ออฟฟิศ )",

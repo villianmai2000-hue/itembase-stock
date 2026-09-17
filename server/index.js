@@ -95,6 +95,11 @@ function getRequesterName(req) {
   }
 }
 
+// Helper to normalize names (collapses multi-spaces and lowercases for forgiving comparisons)
+function normalizeName(str) {
+  return (str || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 // ----------------------------------------------------
 // ITEMS API (วัสดุอุปกรณ์ & สต็อก)
 // ----------------------------------------------------
@@ -570,9 +575,13 @@ app.post('/api/tasks', (req, res) => {
     return res.status(400).json({ error: 'กรุณาระบุชื่องาน' });
   }
 
-  // Validate assignee is in organization
-  if (assignee && !db.team_members.some(m => m.name === assignee)) {
-    return res.status(400).json({ error: `ผู้รับผิดชอบ "${assignee}" ไม่มีอยู่ในรายชื่อขององค์กร` });
+  // Validate assignee is in organization (whitespace and case-insensitive)
+  let matchedAssignee = null;
+  if (assignee) {
+    matchedAssignee = (db.team_members || []).find(m => normalizeName(m.name) === normalizeName(assignee));
+    if (!matchedAssignee) {
+      return res.status(400).json({ error: `ผู้รับผิดชอบ "${assignee}" ไม่มีอยู่ในรายชื่อขององค์กร` });
+    }
   }
 
   const nextNum = (db.tasks.length + 1).toString().padStart(3, '0');
@@ -596,7 +605,7 @@ app.post('/api/tasks', (req, res) => {
     description: description || '',
     status: 'todo',
     priority: priority || 'normal',
-    assignee: assignee || (db.team_members[0] ? db.team_members[0].name : 'ยุทธการ คำกลอน'),
+    assignee: matchedAssignee ? matchedAssignee.name : (assignee || (db.team_members[0] ? db.team_members[0].name : 'ยุทธการ คำกลอน')),
     dueDate: dueDate || '',
     createdAt: getThaiTimestamp(),
     createdBy: user || 'ยุทธการ คำกลอน',
@@ -621,8 +630,12 @@ app.put('/api/tasks/:id', (req, res) => {
   const { title, description, status, priority, assignee, dueDate, materials } = req.body;
 
   // Validate assignee if provided
-  if (assignee && !db.team_members.some(m => m.name === assignee)) {
-    return res.status(400).json({ error: `ผู้รับผิดชอบ "${assignee}" ไม่มีอยู่ในรายชื่อขององค์กร` });
+  let matchedAssignee = null;
+  if (assignee !== undefined && assignee) {
+    matchedAssignee = (db.team_members || []).find(m => normalizeName(m.name) === normalizeName(assignee));
+    if (!matchedAssignee) {
+      return res.status(400).json({ error: `ผู้รับผิดชอบ "${assignee}" ไม่มีอยู่ในรายชื่อขององค์กร` });
+    }
   }
 
   const current = db.tasks[index];
@@ -632,7 +645,7 @@ app.put('/api/tasks/:id', (req, res) => {
     description: description !== undefined ? description : current.description,
     status: status !== undefined ? status : current.status,
     priority: priority !== undefined ? priority : current.priority,
-    assignee: assignee !== undefined ? assignee : current.assignee,
+    assignee: matchedAssignee ? matchedAssignee.name : (assignee !== undefined ? assignee : current.assignee),
     dueDate: dueDate !== undefined ? dueDate : current.dueDate,
     materials: materials !== undefined ? materials : current.materials
   };
@@ -795,7 +808,7 @@ app.get('/api/auth/members', (req, res) => {
       id: m.id,
       name: m.name,
       role: m.role,
-      isAdmin: m.name.trim() === 'ยุทธการ คำกลอน'
+      isAdmin: m.id === 'TM-01' || normalizeName(m.name) === normalizeName('ยุทธการ คำกลอน')
     }));
   res.json(safeList);
 });
@@ -815,9 +828,9 @@ app.post('/api/auth/login', (req, res) => {
   const cleanName = name.trim();
   const cleanPassword = password.trim();
 
-  // Find member in database
+  // Find member in database with forgiving whitespace & case normalization
   const member = (db.team_members || []).find(
-    m => m.name && m.name.trim().toLowerCase() === cleanName.toLowerCase()
+    m => m.name && normalizeName(m.name) === normalizeName(cleanName)
   );
 
   if (!member) {
@@ -830,7 +843,7 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(403).json({ error: 'บัญชีผู้ใช้นี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ควบคุมระบบ' });
   }
 
-  const isSuperAdmin = member.name.trim() === 'ยุทธการ คำกลอน';
+  const isSuperAdmin = member.id === 'TM-01' || normalizeName(member.name) === normalizeName('ยุทธการ คำกลอน');
 
   if (isSuperAdmin) {
     // Exact password mandated: 0962033005Maiiam2000
@@ -839,7 +852,7 @@ app.post('/api/auth/login', (req, res) => {
     }
   } else {
     // For other team members: check member.password or default '1234'
-    const memberPass = member.password || '1234';
+    const memberPass = (member.password || '1234').trim();
     if (cleanPassword !== memberPass) {
       return res.status(401).json({ 
         error: 'รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบรหัสผ่าน หรือติดต่อผู้ควบคุมระบบ (ยุทธการ คำกลอน)' 
@@ -870,7 +883,7 @@ app.post('/api/auth/login', (req, res) => {
 app.get('/api/settings', (req, res) => {
   const db = readDb();
   const requester = getRequesterName(req);
-  const isSuperAdmin = requester === 'ยุทธการ คำกลอน';
+  const isSuperAdmin = normalizeName(requester) === normalizeName('ยุทธการ คำกลอน');
 
   const sanitizedMembers = (db.team_members || []).map(m => {
     if (isSuperAdmin) {
@@ -891,7 +904,7 @@ app.get('/api/settings', (req, res) => {
 app.put('/api/settings/members', (req, res) => {
   const db = readDb();
   const requester = getRequesterName(req);
-  if (requester !== 'ยุทธการ คำกลอน') {
+  if (normalizeName(requester) !== normalizeName('ยุทธการ คำกลอน')) {
     return res.status(403).json({ error: 'สงวนสิทธิ์การตั้งค่าและแก้ไขสมาชิกเฉพาะผู้ควบคุมระบบ ยุทธการ คำกลอน เท่านั้น' });
   }
 
@@ -900,8 +913,25 @@ app.put('/api/settings/members', (req, res) => {
     return res.status(400).json({ error: 'รูปแบบข้อมูลไม่ถูกต้อง' });
   }
 
+  const oldMembers = db.team_members || [];
+
+  // Track renamed members: map oldName -> newName
+  const renameMap = new Map();
+  for (const newM of members) {
+    if (!newM.id) continue;
+    const oldM = oldMembers.find(o => o.id === newM.id);
+    if (oldM && oldM.name && newM.name) {
+      const oldClean = oldM.name.replace(/\s+/g, ' ').trim();
+      const newClean = newM.name.replace(/\s+/g, ' ').trim();
+      if (oldClean !== newClean) {
+        renameMap.set(oldClean, newClean);
+        renameMap.set(oldM.name.trim(), newClean);
+      }
+    }
+  }
+
   // Ensure 'ยุทธการ คำกลอน' always exists and has required password '0962033005Maiiam2000'
-  const adminIndex = members.findIndex(m => m.name && m.name.trim() === 'ยุทธการ คำกลอน');
+  let adminIndex = members.findIndex(m => m.id === 'TM-01' || normalizeName(m.name) === normalizeName('ยุทธการ คำกลอน'));
   if (adminIndex === -1) {
     members.unshift({
       id: 'TM-01',
@@ -912,17 +942,50 @@ app.put('/api/settings/members', (req, res) => {
       isAdmin: true,
       status: 'active'
     });
+    adminIndex = 0;
   } else {
+    members[adminIndex].id = 'TM-01';
+    members[adminIndex].name = 'ยุทธการ คำกลอน';
     members[adminIndex].password = '0962033005Maiiam2000';
     members[adminIndex].isAdmin = true;
   }
 
-  // Ensure all members have a password
-  members = members.map(m => ({
-    ...m,
-    password: m.password || '1234',
-    isAdmin: m.name && m.name.trim() === 'ยุทธการ คำกลอน'
-  }));
+  // Ensure all members have clean formatted names and preserve/set passwords
+  members = members.map(m => {
+    const cleanName = (m.name || '').replace(/\s+/g, ' ').trim();
+    const isSuper = m.id === 'TM-01' || normalizeName(cleanName) === normalizeName('ยุทธการ คำกลอน');
+
+    let pwd = (m.password || '').trim();
+    if (!pwd) {
+      const existing = oldMembers.find(o => o.id === m.id || normalizeName(o.name) === normalizeName(cleanName));
+      pwd = (existing && existing.password) ? existing.password : '1234';
+    }
+    if (isSuper) {
+      pwd = '0962033005Maiiam2000';
+    }
+
+    return {
+      id: m.id,
+      name: cleanName,
+      role: (m.role || '').replace(/\s+/g, ' ').trim(),
+      phone: (m.phone || '-').trim(),
+      password: pwd,
+      isAdmin: isSuper,
+      status: m.status || 'active'
+    };
+  });
+
+  // Cascade rename to tasks (assignee, createdBy)
+  if (renameMap.size > 0 && Array.isArray(db.tasks)) {
+    for (const task of db.tasks) {
+      if (task.assignee && renameMap.has(task.assignee.trim())) {
+        task.assignee = renameMap.get(task.assignee.trim());
+      }
+      if (task.createdBy && renameMap.has(task.createdBy.trim())) {
+        task.createdBy = renameMap.get(task.createdBy.trim());
+      }
+    }
+  }
 
   db.team_members = members;
   saveDb(db);

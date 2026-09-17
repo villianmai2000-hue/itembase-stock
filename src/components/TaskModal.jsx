@@ -23,8 +23,8 @@ export default function TaskModal({
       setTitle(taskToEdit.title || '');
       setDescription(taskToEdit.description || '');
       setStatus(taskToEdit.status || 'todo');
-      setPriority(taskToEdit.priority || 'normal');
-      setAssignee(taskToEdit.assignee || (teamMembers[0]?.name || ''));
+      const matched = teamMembers.find(m => (m.name || '').replace(/\s+/g, ' ').trim() === (taskToEdit.assignee || '').replace(/\s+/g, ' ').trim());
+      setAssignee(matched ? matched.name : (taskToEdit.assignee || (teamMembers[0]?.name || '')));
       setDueDate(taskToEdit.dueDate || '');
       setMaterials(taskToEdit.materials ? JSON.parse(JSON.stringify(taskToEdit.materials)) : []);
     } else {
