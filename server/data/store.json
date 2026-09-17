@@ -6,7 +6,8 @@
       "role": "ผู้ควบคุมระบบ / เขียนแบบโครงการ",
       "phone": "0643032859",
       "isAdmin": true,
-      "status": "active"
+      "status": "active",
+      "password": "0962033005Maiiam2000"
     },
     {
       "id": "TM-10",
@@ -14,7 +15,8 @@
       "role": "ช่างประสานงานและฝ่ายจัดส่งสินค้า",
       "phone": "-",
       "isAdmin": false,
-      "status": "active"
+      "status": "active",
+      "password": "1234"
     },
     {
       "id": "TM-04",
@@ -22,7 +24,8 @@
       "role": "ผู้จัดการโครงการ",
       "phone": "-",
       "isAdmin": false,
-      "status": "active"
+      "status": "active",
+      "password": "1234"
     },
     {
       "id": "TM-05",
@@ -30,13 +33,24 @@
       "role": "เจ้าหน้าที่นับและตรวจสต็อก",
       "phone": "-",
       "isAdmin": false,
-      "status": "active"
+      "status": "active",
+      "password": "1234"
     },
     {
       "id": "TM-06",
       "name": "คุณอำภาพร  สำลีม่วง",
       "role": "งานสโตร์",
       "phone": "-",
+      "isAdmin": false,
+      "status": "active",
+      "password": "1234"
+    },
+    {
+      "id": "TM-06",
+      "name": "DVP",
+      "role": "ช่างหน้างาน",
+      "phone": "-",
+      "password": "1837290852",
       "isAdmin": false,
       "status": "active"
     }
