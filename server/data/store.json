@@ -35,24 +35,6 @@
       "isAdmin": false,
       "status": "active",
       "password": "1234"
-    },
-    {
-      "id": "TM-06",
-      "name": "DVP",
-      "role": "ช่างหน้างาน",
-      "phone": "-",
-      "isAdmin": false,
-      "status": "active",
-      "password": "1973"
-    },
-    {
-      "id": "TM-06",
-      "name": "DVP",
-      "role": "ช่างหน้างาน",
-      "phone": "-",
-      "password": "1973",
-      "isAdmin": false,
-      "status": "active"
     }
   ],
   "locations": [
