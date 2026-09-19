@@ -1,0 +1,22 @@
+﻿{
+  "version": 2,
+  "functions": {
+    "api/index.js": {
+      "excludeFiles": "server/uploads/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/uploads/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

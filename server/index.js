@@ -9,6 +9,10 @@ import {
   readDb, 
   saveDb, 
   initDatabase, 
+  ensureDbInitialized,
+  waitForPendingSaves,
+  saveFileToMongo,
+  getFileFromMongo,
   generateQRCode, 
   resetDatabase, 
   getDbStatus, 
@@ -30,6 +34,34 @@ app.set('etag', false);
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Ensure database is initialized before serving requests (vital for serverless cold starts)
+app.use(async (req, res, next) => {
+  try {
+    await ensureDbInitialized();
+  } catch (e) {
+    console.error('[DB Ready Middleware Error]:', e.message);
+  }
+  next();
+});
+
+// Await pending database saves before sending response (guarantees persistence in serverless environments)
+app.use((req, res, next) => {
+  const origJson = res.json.bind(res);
+  const origSend = res.send.bind(res);
+
+  res.json = async function(data) {
+    await waitForPendingSaves();
+    return origJson(data);
+  };
+
+  res.send = async function(data) {
+    await waitForPendingSaves();
+    return origSend(data);
+  };
+
+  next();
+});
 
 // Disable browser caching for all API endpoints so reloads always fetch fresh data
 app.use('/api', (req, res, next) => {
@@ -105,10 +137,48 @@ app.post('/api/mongodb/disconnect', async (req, res) => {
   }
 });
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+const UPLOAD_DIR = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
+try {
+  if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  }
+} catch (e) {}
+
+// Dynamic upload handler: serves from local disk if present, falls back to MongoDB Atlas uploads collection
+app.get('/uploads/:filename', async (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(UPLOAD_DIR, filename);
+
+  // 1. Check local disk
+  if (fs.existsSync(filePath)) {
+    if (filename.toLowerCase().endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    }
+    return res.sendFile(filePath);
+  }
+
+  // 2. Fallback: retrieve from MongoDB Atlas
+  try {
+    const fileDoc = await getFileFromMongo(filename);
+    if (fileDoc && fileDoc.data) {
+      res.setHeader('Content-Type', fileDoc.contentType || 'image/jpeg');
+      if (filename.toLowerCase().endsWith('.pdf')) {
+        res.setHeader('Content-Disposition', 'inline');
+      }
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      const buffer = Buffer.isBuffer(fileDoc.data)
+        ? fileDoc.data
+        : (fileDoc.data.buffer ? Buffer.from(fileDoc.data.buffer) : Buffer.from(fileDoc.data));
+      return res.send(buffer);
+    }
+  } catch (err) {
+    console.error('Error fetching file from MongoDB:', err);
+  }
+
+  res.status(404).json({ error: 'File not found' });
+});
+
 app.use('/uploads', express.static(UPLOAD_DIR, {
   setHeaders: (res, filePath) => {
     if (filePath.toLowerCase().endsWith('.pdf')) {
@@ -137,14 +207,47 @@ const upload = multer({
   }
 });
 
-// multer middlewares
-const uploadSingle = upload.single('imageFile');         // legacy single
-const uploadMulti  = upload.array('imageFiles', 8);     // new multi-image (up to 8)
-const uploadAny    = upload.any();                      // accepts any file fields (profileImage, coverImage, imageFiles, etc.)
+// Middleware to automatically persist any uploaded multer file to MongoDB Atlas
+const persistUploadsToMongo = async (req, res, next) => {
+  try {
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      for (const f of req.files) {
+        let buf = f.buffer;
+        if (!buf && f.path && fs.existsSync(f.path)) {
+          buf = fs.readFileSync(f.path);
+        }
+        if (buf) {
+          await saveFileToMongo(f.filename, f.mimetype || 'image/jpeg', buf);
+        }
+      }
+    } else if (req.file) {
+      let buf = req.file.buffer;
+      if (!buf && req.file.path && fs.existsSync(req.file.path)) {
+        buf = fs.readFileSync(req.file.path);
+      }
+      if (buf) {
+        await saveFileToMongo(req.file.filename, req.file.mimetype || 'image/jpeg', buf);
+      }
+    }
+  } catch (e) {
+    console.error('Error in persistUploadsToMongo middleware:', e);
+  }
+  next();
+};
 
+const withPersist = (fn) => (req, res, next) => {
+  fn(req, res, async (err) => {
+    if (err) return next(err);
+    await persistUploadsToMongo(req, res, next);
+  });
+};
 
+// multer middlewares with automatic MongoDB persistence
+const uploadSingle = withPersist(upload.single('imageFile'));
+const uploadMulti  = withPersist(upload.array('imageFiles', 8));
+const uploadAny    = withPersist(upload.any());
 
-// Helper to safely write base64 image or PDF strings to disk and return static URL (prevents database bloating)
+// Helper to safely write base64 image or PDF strings to disk and return static URL (and persist to MongoDB Atlas)
 function saveBase64File(dataUrl, prefix = 'upload') {
   if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
     return dataUrl;
@@ -154,8 +257,12 @@ function saveBase64File(dataUrl, prefix = 'upload') {
     if (dataUrl.startsWith('data:application/pdf;base64,')) {
       const base64Data = dataUrl.replace(/^data:application\/pdf;base64,/, '');
       const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e9)}.pdf`;
-      const filePath = path.join(UPLOAD_DIR, filename);
-      fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+      const buffer = Buffer.from(base64Data, 'base64');
+      try {
+        const filePath = path.join(UPLOAD_DIR, filename);
+        fs.writeFileSync(filePath, buffer);
+      } catch (e) {}
+      saveFileToMongo(filename, 'application/pdf', buffer);
       console.log(`✅ [Server] บันทึกไฟล์ PDF สำเร็จ: /uploads/${filename}`);
       return `/uploads/${filename}`;
     }
@@ -166,8 +273,12 @@ function saveBase64File(dataUrl, prefix = 'upload') {
     let ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
     if (ext.includes('svg')) ext = 'svg';
     const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
-    const filePath = path.join(UPLOAD_DIR, filename);
-    fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
+    const buffer = Buffer.from(matches[2], 'base64');
+    try {
+      const filePath = path.join(UPLOAD_DIR, filename);
+      fs.writeFileSync(filePath, buffer);
+    } catch (e) {}
+    saveFileToMongo(filename, `image/${ext === 'jpg' ? 'jpeg' : ext}`, buffer);
     return `/uploads/${filename}`;
   } catch (err) {
     console.error('Error saving base64 file:', err);
@@ -175,6 +286,7 @@ function saveBase64File(dataUrl, prefix = 'upload') {
   }
 }
 const saveBase64Image = saveBase64File;
+
 
 // Helper to get Thai formatted timestamp
 function getThaiTimestamp() {
@@ -2091,10 +2203,17 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start Server
-app.listen(PORT, '0.0.0.0', async () => {
-  await initDatabase();
-  console.log(`Backend API Server running at http://0.0.0.0:${PORT}`);
-  startCloudflareTunnel(PORT);
-});
+// Start Server (only when run directly or locally, skipped inside Vercel serverless environment)
+if (!process.env.VERCEL) {
+  app.listen(PORT, '0.0.0.0', async () => {
+    await initDatabase();
+    console.log(`Backend API Server running at http://0.0.0.0:${PORT}`);
+    if (process.env.NODE_ENV !== 'production') {
+      startCloudflareTunnel(PORT);
+    }
+  });
+}
+
+export default app;
+
 

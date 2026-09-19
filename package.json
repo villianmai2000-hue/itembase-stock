@@ -8,7 +8,7 @@
     "dev": "concurrently \"node server/index.js\" \"vite --host\"",
     "server": "node server/index.js",
     "client": "vite --host",
-    "build": "vite build",
+    "build": "vite build && node scripts/copy-uploads-to-dist.js",
     "preview": "vite preview"
   },
   "dependencies": {

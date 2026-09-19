@@ -48,12 +48,17 @@ let syncTimer = null;
 let isSyncingToGitHub = false;
 let pendingGitHubSync = false;
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (e) {}
+try {
+  if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  }
+} catch (e) {}
+
 
 // Initial Seed Data
 const defaultSeed = {
@@ -468,17 +473,72 @@ export async function connectMongo() {
   return mongoConnectingPromise;
 }
 
+let pendingSaves = new Set();
+
+export async function waitForPendingSaves() {
+  if (pendingSaves.size > 0) {
+    await Promise.allSettled(Array.from(pendingSaves));
+  }
+}
+
+let mongoUploadsCollection = null;
+
+export async function getMongoUploadsCollection() {
+  if (mongoUploadsCollection && isMongoConnected) return mongoUploadsCollection;
+  try {
+    const col = await connectMongo();
+    if (col && mongoClient) {
+      const dbName = process.env.MONGODB_DB || 'itembase';
+      const db = mongoClient.db(dbName);
+      mongoUploadsCollection = db.collection('uploads');
+      return mongoUploadsCollection;
+    }
+  } catch (err) {
+    console.error('⚠️ [MongoDB Uploads Error]:', err.message);
+  }
+  return null;
+}
+
+export async function saveFileToMongo(filename, contentType, buffer) {
+  try {
+    const col = await getMongoUploadsCollection();
+    if (col && buffer) {
+      await col.replaceOne(
+        { filename },
+        { filename, contentType, data: buffer, size: buffer.length, updatedAt: new Date() },
+        { upsert: true }
+      );
+      console.log(`✅ [MongoDB Uploads] บันทึกไฟล์ ${filename} (${Math.round(buffer.length / 1024)} KB) ลง MongoDB Atlas สำเร็จ!`);
+      return true;
+    }
+  } catch (err) {
+    console.error('⚠️ [MongoDB Uploads Save Error]:', err.message);
+  }
+  return false;
+}
+
+export async function getFileFromMongo(filename) {
+  try {
+    const col = await getMongoUploadsCollection();
+    if (col) {
+      return await col.findOne({ filename });
+    }
+  } catch (err) {
+    console.error('⚠️ [MongoDB Uploads Get Error]:', err.message);
+  }
+  return null;
+}
+
 // Read local file fallback
 function readLocalDb() {
-  if (!fs.existsSync(DB_FILE)) {
-    saveLocalDb(defaultSeed);
-    return defaultSeed;
-  }
   try {
+    if (!fs.existsSync(DB_FILE)) {
+      saveLocalDb(defaultSeed);
+      return defaultSeed;
+    }
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     return JSON.parse(raw);
   } catch (err) {
-    console.error('Error reading local db:', err);
     return defaultSeed;
   }
 }
@@ -488,7 +548,9 @@ function saveLocalDb(data) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Error saving local db:', err);
+    if (!process.env.VERCEL) {
+      console.error('Error saving local db:', err);
+    }
   }
 }
 
@@ -506,28 +568,27 @@ export function saveDb(data) {
   cachedDb = data;
   saveLocalDb(data);
 
-  // 1. Primary: Save to MongoDB Atlas (Instant, high-performance real-time cloud database)
-  if (mongoCollection && isMongoConnected) {
-    mongoCollection.replaceOne(
-      { _id: 'main_store' },
-      { _id: 'main_store', ...data, savedAt: new Date().toISOString() },
-      { upsert: true }
-    ).catch(err => {
-      console.error('⚠️ [MongoDB Atlas] Async save error:', err.message);
-    });
-  } else if (getMongoUri()) {
-    connectMongo().then(col => {
+  // 1. Primary: Save to MongoDB Atlas (tracked in pendingSaves for serverless reliability)
+  const savePromise = (async () => {
+    try {
+      let col = mongoCollection;
+      if (!col || !isMongoConnected) {
+        col = await connectMongo();
+      }
       if (col) {
-        col.replaceOne(
+        await col.replaceOne(
           { _id: 'main_store' },
           { _id: 'main_store', ...data, savedAt: new Date().toISOString() },
           { upsert: true }
-        ).catch(err => {
-          console.error('⚠️ [MongoDB Atlas] Async save error:', err.message);
-        });
+        );
       }
-    });
-  }
+    } catch (err) {
+      console.error('⚠️ [MongoDB Atlas] Async save error:', err.message);
+    }
+  })();
+
+  pendingSaves.add(savePromise);
+  savePromise.finally(() => pendingSaves.delete(savePromise));
 
   // 2. Secondary/Fallback: Debounced async sync to GitHub (branch 'data') only when MongoDB is not active
   if (!getMongoUri() && GITHUB_TOKEN) {
@@ -536,7 +597,23 @@ export function saveDb(data) {
       pushToGitHub(data);
     }, 1500);
   }
+
+  return savePromise;
 }
+
+let initPromise = null;
+export async function ensureDbInitialized() {
+  if (cachedDb && isMongoConnected) {
+    return cachedDb;
+  }
+  if (!initPromise) {
+    initPromise = initDatabase().finally(() => {
+      initPromise = null;
+    });
+  }
+  return initPromise;
+}
+
 
 // Initialize database with QR codes & Cloud Sync (MongoDB Atlas primary, GitHub fallback)
 export async function initDatabase() {
