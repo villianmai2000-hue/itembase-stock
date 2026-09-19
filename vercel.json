@@ -1,10 +1,5 @@
-﻿{
-  "version": 2,
-  "functions": {
-    "api/index.js": {
-      "excludeFiles": "server/uploads/**"
-    }
-  },
+{
+  "": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
       "source": "/api/(.*)",

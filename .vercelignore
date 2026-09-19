@@ -1,0 +1,4 @@
+cloudflared.exe
+*.log
+.env
+public-url.txt
