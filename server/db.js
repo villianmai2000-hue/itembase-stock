@@ -24,7 +24,7 @@ export function sanitizeMongoUri(rawUri) {
   if (!rawUri || typeof rawUri !== 'string') return DEFAULT_MONGO_URI;
   let uri = rawUri.trim();
   if (!uri) return DEFAULT_MONGO_URI;
-  if (uri.includes('<db_password>') || uri.includes('%3Cdb_password%3E') || uri.includes('<password>')) {
+  if (uri.includes('itembase_admin') && (uri.includes('<db_password>') || uri.includes('%3Cdb_password%3E') || uri.includes('<password>'))) {
     uri = uri
       .replace('<db_password>', '0962033005Maiiam2000')
       .replace('%3Cdb_password%3E', '0962033005Maiiam2000')
@@ -736,15 +736,16 @@ export function getDbStatus() {
   let mode = 'local_file';
   let provider = 'Local File';
 
+  const isOracle = uri.includes('oraclecloud.com') || uri.includes('adb.');
   if (isMongoConnected) {
-    mode = 'mongodb_atlas';
-    provider = 'MongoDB Atlas';
+    mode = isOracle ? 'oracle_cloud' : 'mongodb_atlas';
+    provider = isOracle ? 'Oracle Cloud (Autonomous DB)' : 'MongoDB Atlas';
   } else if (isGitHubConnected) {
     mode = 'github_cloud';
     provider = 'GitHub';
   } else if (uri) {
-    mode = 'connecting_mongodb';
-    provider = 'MongoDB Atlas';
+    mode = isOracle ? 'connecting_oracle' : 'connecting_mongodb';
+    provider = isOracle ? 'Oracle Cloud (Autonomous DB)' : 'MongoDB Atlas';
   } else if (GITHUB_TOKEN) {
     mode = 'connecting_github';
     provider = 'GitHub';
