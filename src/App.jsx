@@ -435,6 +435,43 @@ export default function App() {
   // ITEM ACTIONS (วัสดุอุปกรณ์ & สต็อก)
   // ------------------------------------
 
+  // Compress an image File to max ~900KB before upload (prevents Vercel 413 error)
+  const compressImage = (file, maxSizeKB = 900) => new Promise((resolve) => {
+    if (file.size <= maxSizeKB * 1024) { resolve(file); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        const maxDim = 1920;
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        let quality = 0.85;
+        const tryCompress = () => {
+          canvas.toBlob((blob) => {
+            if (!blob) { resolve(file); return; }
+            if (blob.size <= maxSizeKB * 1024 || quality <= 0.3) {
+              resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+            } else {
+              quality -= 0.1;
+              tryCompress();
+            }
+          }, 'image/jpeg', quality);
+        };
+        tryCompress();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
   const handleSaveItem = async (formData, itemId = null) => {
     if (isSavingItem) return; // prevent double-submit
     setIsSavingItem(true);
@@ -459,7 +496,11 @@ export default function App() {
         if (formData.gps) {
           data.append('gps', JSON.stringify(formData.gps));
         }
-        formData.imageFiles.forEach(file => {
+        // Compress each image to ≤900KB before uploading (Vercel limit is 4.5MB total)
+        const compressedFiles = await Promise.all(
+          formData.imageFiles.map(f => compressImage(f, 900))
+        );
+        compressedFiles.forEach(file => {
           data.append('imageFiles', file);
         });
         if (formData.existingImageUrls && formData.existingImageUrls.length > 0) {
