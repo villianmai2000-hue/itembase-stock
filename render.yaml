@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: itembase-stock
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        value: mongodb+srv://itembase_admin:0962033005Maiiam2000@cluster0.otyldzl.mongodb.net/?appName=Cluster0
